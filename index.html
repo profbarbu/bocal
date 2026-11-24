@@ -1,0 +1,3165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur Bocal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@700;800&family=Oswald:wght@600;700&family=Pacifico&family=Playfair+Display:wght@700&family=Roboto+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #0d9488;
+            --accent-hover: #0f766e;
+        }
+        body {
+            font-family: 'Montserrat', sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+        /* Arrière-plan atmosphérique macOS Liquid Glass */
+        .macos-wallpaper {
+            background-color: #eef2f9;
+        }
+        body:not(.theme-light) .macos-wallpaper,
+        body:not(.theme-light) {
+            background-color: #070b14;
+        }
+        body.theme-light {
+            background-color: #eef2f9;
+        }
+
+        /* Vagues floues animées en arrière-plan */
+        @keyframes waveFloat1 {
+            0%, 100% { transform: translate3d(-12%, -8%, 0) rotate(0deg) scale(1); }
+            33% { transform: translate3d(24%, 14%, 0) rotate(22deg) scale(1.18); }
+            66% { transform: translate3d(6%, 26%, 0) rotate(-14deg) scale(0.94); }
+        }
+        @keyframes waveFloat2 {
+            0%, 100% { transform: translate3d(10%, 8%, 0) rotate(0deg) scale(1.08); }
+            33% { transform: translate3d(-26%, -12%, 0) rotate(-25deg) scale(0.92); }
+            66% { transform: translate3d(-10%, 22%, 0) rotate(18deg) scale(1.15); }
+        }
+        @keyframes waveFloat3 {
+            0%, 100% { transform: translate3d(-10%, 10%, 0) rotate(-8deg) scale(1); }
+            50% { transform: translate3d(22%, -24%, 0) rotate(24deg) scale(1.2); }
+        }
+        .bg-wave-layer {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .bg-wave {
+            position: absolute;
+            border-radius: 42% 58% 63% 37% / 45% 38% 62% 55%;
+            filter: blur(55px);
+            will-change: transform;
+        }
+        .bg-wave-1 {
+            top: -12%;
+            left: -8%;
+            width: 56vw;
+            height: 56vw;
+            min-width: 380px;
+            min-height: 380px;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.46), rgba(20, 184, 166, 0.42));
+            animation: waveFloat1 11s ease-in-out infinite;
+        }
+        .bg-wave-2 {
+            top: 12%;
+            right: -10%;
+            width: 60vw;
+            height: 52vw;
+            min-width: 400px;
+            min-height: 360px;
+            background: linear-gradient(225deg, rgba(147, 51, 234, 0.44), rgba(37, 99, 235, 0.44));
+            animation: waveFloat2 13s ease-in-out infinite;
+        }
+        .bg-wave-3 {
+            bottom: -16%;
+            left: 12%;
+            width: 64vw;
+            height: 48vw;
+            min-width: 420px;
+            min-height: 340px;
+            background: linear-gradient(45deg, rgba(13, 148, 136, 0.44), rgba(79, 70, 229, 0.42));
+            animation: waveFloat3 15s ease-in-out infinite;
+        }
+        body.theme-light .bg-wave-1 {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.58), rgba(20, 184, 166, 0.52));
+        }
+        body.theme-light .bg-wave-2 {
+            background: linear-gradient(225deg, rgba(168, 85, 247, 0.48), rgba(59, 130, 246, 0.54));
+        }
+        body.theme-light .bg-wave-3 {
+            background: linear-gradient(45deg, rgba(16, 185, 129, 0.52), rgba(99, 102, 241, 0.48));
+        }
+
+        /* Surfaces Liquid Glass Givrées */
+        .liquid-glass {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.56) 0%, rgba(15, 23, 42, 0.38) 100%);
+            backdrop-filter: blur(38px) saturate(205%) contrast(108%);
+            -webkit-backdrop-filter: blur(38px) saturate(205%) contrast(108%);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow:
+                0 20px 44px -8px rgba(0, 0, 0, 0.55),
+                inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.28),
+                inset 0 -1px 1px 0 rgba(255, 255, 255, 0.08);
+        }
+        body.theme-light .liquid-glass {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.36) 100%);
+            backdrop-filter: blur(36px) saturate(210%) contrast(106%);
+            -webkit-backdrop-filter: blur(36px) saturate(210%) contrast(106%);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            box-shadow:
+                0 16px 40px -8px rgba(15, 23, 42, 0.12),
+                inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95),
+                inset 0 -1px 1px 0 rgba(255, 255, 255, 0.4);
+        }
+
+        .liquid-glass-subtle {
+            background: linear-gradient(160deg, rgba(51, 65, 85, 0.44) 0%, rgba(15, 23, 42, 0.30) 100%);
+            backdrop-filter: blur(28px) saturate(195%);
+            -webkit-backdrop-filter: blur(28px) saturate(195%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+                0 8px 24px -4px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.20);
+        }
+        body.theme-light .liquid-glass-subtle {
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0.28) 100%);
+            backdrop-filter: blur(28px) saturate(195%);
+            -webkit-backdrop-filter: blur(28px) saturate(195%);
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            box-shadow:
+                0 6px 20px -4px rgba(15, 23, 42, 0.06),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .liquid-pill {
+            background: linear-gradient(180deg, rgba(51, 65, 85, 0.62) 0%, rgba(30, 41, 59, 0.42) 100%);
+            backdrop-filter: blur(22px) saturate(190%);
+            -webkit-backdrop-filter: blur(22px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow:
+                0 6px 16px rgba(0, 0, 0, 0.32),
+                inset 0 1px 0 rgba(255, 255, 255, 0.24);
+        }
+        body.theme-light .liquid-pill {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.48) 100%);
+            backdrop-filter: blur(22px) saturate(190%);
+            -webkit-backdrop-filter: blur(22px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            box-shadow:
+                0 4px 12px rgba(15, 23, 42, 0.07),
+                inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        }
+
+        .liquid-input {
+            background-color: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #f8fafc;
+        }
+        body.theme-light .liquid-input {
+            background-color: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            color: #0f172a;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.6); }
+
+        input[type="range"] {
+            accent-color: #14b8a6;
+            cursor: pointer;
+        }
+        .accordion-content {
+            display: none;
+        }
+        .accordion-content.open {
+            display: block;
+        }
+        .accordion-arrow {
+            transition: transform 0.2s ease;
+        }
+        .accordion-arrow.open {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body class="macos-wallpaper text-slate-900 dark:text-slate-50 flex flex-col md:flex-row h-screen w-screen overflow-hidden select-none p-2.5 sm:p-3.5 gap-3 transition-colors duration-300 relative">
+
+    <!-- Arrière-plan de vagues floues animées -->
+    <div class="bg-wave-layer" aria-hidden="true">
+        <div class="bg-wave bg-wave-1"></div>
+        <div class="bg-wave bg-wave-2"></div>
+        <div class="bg-wave bg-wave-3"></div>
+    </div>
+
+    <!-- PANNEAU LATÉRAL DE CONTRÔLE (Liquid Glass) -->
+    <aside class="relative z-10 w-full md:w-[390px] lg:w-[420px] h-[52vh] md:h-full liquid-glass rounded-3xl flex flex-col overflow-hidden shrink-0">
+        
+        <!-- En-tête -->
+        <div class="p-4 border-b border-slate-400/20 flex flex-col gap-3 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 aspect-square shrink-0 rounded-xl bg-gradient-to-br from-sky-400 via-teal-400 to-emerald-500 flex items-center justify-center text-white shadow-lg shadow-teal-500/25 ring-1 ring-white/60">
+                    <!-- Icône silhouette carrée d'un bocal/bouteille avec son couvercle -->
+                    <svg class="w-5 h-5 drop-shadow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="7" y="3" width="10" height="3" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 6v1.5c0 .4-.3.8-.7 1l-1.6.8c-.7.3-1.2 1-1.2 1.8v7.7c0 1.2 1 2.2 2.2 2.2h9.6c1.2 0 2.2-1 2.2-2.2v-7.7c0-.8-.5-1.5-1.2-1.8l-1.6-.8c-.4-.2-.7-.6-.7-1V6"/>
+                        <path stroke-linecap="round" d="M5.5 13h13"/>
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <h1 id="app-title" class="font-bold text-base leading-tight tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                        Générateur Bocal
+                    </h1>
+                    <p id="app-subtitle" class="text-xs text-slate-600 dark:text-slate-300/80">Conception paramétrique</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btn-help" class="liquid-pill px-3 py-2 rounded-full hover:bg-white/80 dark:hover:bg-slate-700/70 text-slate-700 dark:text-slate-100 transition flex items-center justify-center gap-1.5 text-xs font-semibold" title="Aide">
+                    <svg class="w-4 h-4 text-sky-600 dark:text-sky-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span id="lbl-help-btn">Aide</span>
+                </button>
+                <button id="btn-prefs" class="liquid-pill px-3 py-2 rounded-full hover:bg-white/80 dark:hover:bg-slate-700/70 text-slate-700 dark:text-slate-100 transition flex items-center justify-center gap-1.5 text-xs font-semibold" title="Préférences">
+                    <svg class="w-4 h-4 text-teal-600 dark:text-teal-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span id="lbl-prefs-btn">Préférences</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenu défilant des paramètres (Accordéons fermés par défaut) -->
+        <div class="flex-1 overflow-y-auto p-3.5 space-y-2.5">
+
+            <!-- 1. DIMENSIONS GÉNÉRALES -->
+            <div class="liquid-glass-subtle rounded-2xl overflow-hidden">
+                <button type="button" class="accordion-trigger w-full p-3.5 flex items-center justify-between text-left font-semibold text-sm text-slate-900 dark:text-white hover:bg-white/30 dark:hover:bg-white/5 transition" data-target="sec-1">
+                    <span id="sec1-title">1. Dimensions générales (MM)</span>
+                    <svg class="accordion-arrow w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="sec-1" class="accordion-content px-3.5 pb-4 pt-2 space-y-3 border-t border-slate-400/20">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-diameter" class="text-slate-600 dark:text-slate-300">Diamètre extérieur</span>
+                            <span id="val-diameter" class="font-mono font-bold text-teal-700 dark:text-teal-300">70.0 mm</span>
+                        </div>
+                        <input id="inp-diameter" type="range" min="30" max="180" step="1" value="70" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-jar-height" class="text-slate-600 dark:text-slate-300">Hauteur du bocal</span>
+                            <span id="val-jar-height" class="font-mono font-bold text-teal-700 dark:text-teal-300">95.0 mm</span>
+                        </div>
+                        <input id="inp-jar-height" type="range" min="30" max="240" step="1" value="95" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-wall" class="text-slate-600 dark:text-slate-300">Épaisseur des parois</span>
+                            <span id="val-wall" class="font-mono font-bold text-teal-700 dark:text-teal-300">2.4 mm</span>
+                        </div>
+                        <input id="inp-wall" type="range" min="1.2" max="6.0" step="0.2" value="2.4" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-lid-height" class="text-slate-600 dark:text-slate-300">Hauteur du couvercle</span>
+                            <span id="val-lid-height" class="font-mono font-bold text-teal-700 dark:text-teal-300">18.0 mm</span>
+                        </div>
+                        <input id="inp-lid-height" type="range" min="10" max="45" step="1" value="18" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-base-bevel" class="text-slate-600 dark:text-slate-300">Biseau à la base du bocal</span>
+                            <span id="val-base-bevel" class="font-mono font-bold text-teal-700 dark:text-teal-300">1.5 mm</span>
+                        </div>
+                        <input id="inp-base-bevel" type="range" min="0" max="8" step="0.5" value="1.5" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+
+                    <!-- Dimensions intérieures calculées en direct -->
+                    <div class="mt-2 p-3 rounded-2xl bg-white/45 dark:bg-slate-950/35 border border-white/50 dark:border-white/10 space-y-1.5 text-[11px]">
+                        <div id="lbl-inner-dims-title" class="font-bold text-teal-700 dark:text-teal-300 flex items-center justify-between">
+                            <span>Dimensions intérieures utiles</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span id="lbl-inner-width" class="text-slate-600 dark:text-slate-300">Largeur intérieure (corps / col)</span>
+                            <span id="val-inner-width" class="font-mono font-semibold text-slate-900 dark:text-white">65.2 / 56.9 mm</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span id="lbl-inner-height" class="text-slate-600 dark:text-slate-300">Hauteur intérieure</span>
+                            <span id="val-inner-height" class="font-mono font-semibold text-slate-900 dark:text-white">92.6 mm</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span id="lbl-inner-volume" class="text-slate-600 dark:text-slate-300">Volume disponible</span>
+                            <span id="val-inner-volume" class="font-mono font-bold text-emerald-600 dark:text-emerald-400">305 mL</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SILHOUETTE & SECTIONS -->
+            <div class="liquid-glass-subtle rounded-2xl overflow-hidden">
+                <button type="button" class="accordion-trigger w-full p-3.5 flex items-center justify-between text-left font-semibold text-sm text-slate-900 dark:text-white hover:bg-white/30 dark:hover:bg-white/5 transition" data-target="sec-2">
+                    <span id="sec2-title">2. Silhouette & sections</span>
+                    <svg class="accordion-arrow w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="sec-2" class="accordion-content px-3.5 pb-4 pt-2 space-y-3 border-t border-slate-400/20">
+                    <div>
+                        <label id="lbl-silhouette" class="block text-xs text-slate-600 dark:text-slate-300 mb-1">Silhouette globale</label>
+                        <select id="inp-silhouette" class="w-full p-2 rounded-xl liquid-input text-xs font-medium focus:outline-none focus:border-teal-500">
+                            <option value="cylinder">Cylindre droit</option>
+                            <option value="amphora">Amphore / Bombé</option>
+                            <option value="hourglass">Sablier / Cintré</option>
+                            <option value="tapered">Conique (base large)</option>
+                            <option value="shouldered">Épaulé</option>
+                        </select>
+                    </div>
+                    <div id="silhouette-amp-wrap" class="hidden">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-sil-amp" class="text-slate-600 dark:text-slate-300">Amplitude de la courbure</span>
+                            <span id="val-sil-amp" class="font-mono font-bold text-teal-700 dark:text-teal-300">6.0 mm</span>
+                        </div>
+                        <input id="inp-sil-amp" type="range" min="1" max="20" step="0.5" value="6" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+
+                    <div id="sections-container" class="space-y-2.5"></div>
+
+                    <button id="btn-add-section" type="button" class="w-full py-2 px-3 rounded-full liquid-pill hover:bg-white/80 dark:hover:bg-slate-700/70 text-xs font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center gap-1.5 transition">
+                        <span>+</span>
+                        <span id="lbl-add-section">Ajouter une section</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. PARAMÈTRES DU FILETAGE -->
+            <div class="liquid-glass-subtle rounded-2xl overflow-hidden">
+                <button type="button" class="accordion-trigger w-full p-3.5 flex items-center justify-between text-left font-semibold text-sm text-slate-900 dark:text-white hover:bg-white/30 dark:hover:bg-white/5 transition" data-target="sec-3">
+                    <span id="sec3-title">3. Paramètres du filetage</span>
+                    <svg class="accordion-arrow w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="sec-3" class="accordion-content px-3.5 pb-4 pt-2 space-y-3 border-t border-slate-400/20">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-turns" class="text-slate-600 dark:text-slate-300">Nombre de tours</span>
+                            <span id="val-turns" class="font-mono font-bold text-teal-700 dark:text-teal-300">1.75 tours</span>
+                        </div>
+                        <input id="inp-turns" type="range" min="0.75" max="4" step="0.25" value="1.75" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-pitch" class="text-slate-600 dark:text-slate-300">Pas de vis (espacement)</span>
+                            <span id="val-pitch" class="font-mono font-bold text-teal-700 dark:text-teal-300">4.0 mm</span>
+                        </div>
+                        <input id="inp-pitch" type="range" min="2.0" max="8.0" step="0.2" value="4.0" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-thread-depth" class="text-slate-600 dark:text-slate-300">Profondeur du filet</span>
+                            <span id="val-thread-depth" class="font-mono font-bold text-teal-700 dark:text-teal-300">1.4 mm</span>
+                        </div>
+                        <input id="inp-thread-depth" type="range" min="0.6" max="3.0" step="0.1" value="1.4" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-clearance" class="text-slate-600 dark:text-slate-300">Jeu mécanique (tolérance 3D)</span>
+                            <span id="val-clearance" class="font-mono font-bold text-amber-600 dark:text-amber-300">0.35 mm</span>
+                        </div>
+                        <input id="inp-clearance" type="range" min="0.15" max="0.80" step="0.05" value="0.35" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. STYLE & TEXTURE DU COUVERCLE -->
+            <div class="liquid-glass-subtle rounded-2xl overflow-hidden">
+                <button type="button" class="accordion-trigger w-full p-3.5 flex items-center justify-between text-left font-semibold text-sm text-slate-900 dark:text-white hover:bg-white/30 dark:hover:bg-white/5 transition" data-target="sec-4">
+                    <span id="sec4-title">4. Style & texture du couvercle</span>
+                    <svg class="accordion-arrow w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="sec-4" class="accordion-content px-3.5 pb-4 pt-2 space-y-3 border-t border-slate-400/20">
+                    <div class="flex items-center justify-between">
+                        <span id="lbl-lid-color" class="text-xs text-slate-600 dark:text-slate-300">Couleur du couvercle</span>
+                        <input id="inp-lid-color" type="color" value="#14b8a6" class="w-8 h-7 rounded-lg cursor-pointer border-0 bg-transparent">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span id="lbl-lid-bevel" class="text-slate-600 dark:text-slate-300">Biseau supérieur</span>
+                            <span id="val-lid-bevel" class="font-mono font-bold text-teal-700 dark:text-teal-300">2.0 mm</span>
+                        </div>
+                        <input id="inp-lid-bevel" type="range" min="0" max="6" step="0.5" value="2.0" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                    </div>
+                    <div>
+                        <label id="lbl-lid-tex" class="block text-xs text-slate-600 dark:text-slate-300 mb-1">Texture du couvercle</label>
+                        <select id="inp-lid-tex" class="w-full p-2 rounded-xl liquid-input text-xs font-medium focus:outline-none focus:border-teal-500">
+                            <option value="flutes" selected>Cannelures verticales (prise en main)</option>
+                            <option value="smooth">Lisse</option>
+                            <option value="knurl">Moletage diamant</option>
+                            <option value="rings">Anneaux horizontaux</option>
+                            <option value="twist">Torsade hélicoïdale</option>
+                            <option value="facets">Facettes polygonales (Carré / Polygone)</option>
+                        </select>
+                    </div>
+                    <div id="lid-tex-params" class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span id="lbl-lid-tex-depth" class="text-slate-600 dark:text-slate-300">Relief de texture</span>
+                                <span id="val-lid-tex-depth" class="font-mono font-bold text-teal-700 dark:text-teal-300">0.7 mm</span>
+                            </div>
+                            <input id="inp-lid-tex-depth" type="range" min="0.1" max="3.0" step="0.1" value="0.7" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span id="lbl-lid-tex-freq" class="text-slate-600 dark:text-slate-300">Fréquence / Répétitions</span>
+                                <span id="val-lid-tex-freq" class="font-mono font-bold text-teal-700 dark:text-teal-300">36</span>
+                            </div>
+                            <input id="inp-lid-tex-freq" type="range" min="6" max="72" step="2" value="36" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                        </div>
+                        <div id="lid-twist-wrap" class="hidden">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span id="lbl-lid-twist" class="text-slate-600 dark:text-slate-300">Degré de torsade</span>
+                                <span id="val-lid-twist" class="font-mono font-bold text-teal-700 dark:text-teal-300">45°</span>
+                            </div>
+                            <input id="inp-lid-twist" type="range" min="-360" max="360" step="5" value="45" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                        </div>
+                    </div>
+
+                    <!-- Marquage Texte / Logo SVG sur le dessus du couvercle -->
+                    <div class="pt-2.5 border-t border-slate-400/20 space-y-2.5">
+                        <label id="lbl-lid-mark-type" class="block text-xs font-semibold text-slate-800 dark:text-slate-100">Marquage sur le dessus du couvercle</label>
+                        <select id="inp-lid-mark-type" class="w-full p-2 rounded-xl liquid-input text-xs font-medium focus:outline-none focus:border-teal-500">
+                            <option value="none">Aucun</option>
+                            <option value="text">Texte personnalisé</option>
+                            <option value="logo">Logo vectoriel (.SVG)</option>
+                        </select>
+
+                        <div id="lid-mark-controls" class="hidden space-y-2.5 pt-1">
+                            <div class="grid grid-cols-3 gap-1 p-1 rounded-full bg-slate-900/5 dark:bg-white/5 border border-white/50 dark:border-white/10 text-xs font-semibold">
+                                <button id="btn-mark-engrave" type="button" class="py-1.5 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 text-slate-950 shadow-sm transition">Gravure</button>
+                                <button id="btn-mark-outline" type="button" class="py-1.5 rounded-full transition text-slate-700 dark:text-slate-200">Contour</button>
+                                <button id="btn-mark-emboss" type="button" class="py-1.5 rounded-full transition text-slate-700 dark:text-slate-200">Relief</button>
+                            </div>
+
+                            <div id="lid-mark-text-wrap" class="space-y-2">
+                                <input id="inp-lid-mark-text" type="text" value="CAFÉ" placeholder="Votre texte..." class="w-full p-2 rounded-xl liquid-input text-xs font-semibold focus:outline-none focus:border-teal-500">
+                                <select id="inp-lid-mark-font" class="w-full p-2 rounded-xl liquid-input text-xs font-medium focus:outline-none focus:border-teal-500">
+                                    <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                                    <option value="Impact, 'Arial Black', sans-serif">Impact</option>
+                                    <option value="'Open Sans', sans-serif" selected>Open Sans</option>
+                                    <option value="'Oswald', sans-serif">Oswald</option>
+                                    <option value="'Playfair Display', serif">Playfair Display</option>
+                                    <option value="'Pacifico', cursive">Pacifico</option>
+                                    <option value="'Roboto Mono', monospace">Roboto Mono</option>
+                                </select>
+                            </div>
+
+                            <div id="lid-mark-logo-wrap" class="hidden space-y-2">
+                                <label class="w-full py-2 px-3 rounded-full liquid-pill hover:bg-white/80 dark:hover:bg-slate-700/70 text-xs font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                    <span id="lbl-upload-logo">Choisir un fichier SVG (.svg)</span>
+                                    <input id="inp-lid-logo-file" type="file" accept=".svg,image/svg+xml" class="hidden">
+                                </label>
+                                <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200 cursor-pointer">
+                                    <input id="chk-logo-invert" type="checkbox" checked class="rounded accent-teal-500">
+                                    <span id="lbl-logo-invert">Inverser les couleurs (fond clair)</span>
+                                </label>
+                            </div>
+
+                            <div id="lid-mark-outline-wrap" class="hidden">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span id="lbl-outline-width" class="text-slate-600 dark:text-slate-300">Épaisseur du contour</span>
+                                    <span id="val-outline-width" class="font-mono font-bold text-teal-700 dark:text-teal-300">0.2 mm</span>
+                                </div>
+                                <input id="inp-outline-width" type="range" min="0.2" max="5.0" step="0.1" value="0.2" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span id="lbl-mark-size" class="text-slate-600 dark:text-slate-300">Taille du motif</span>
+                                    <span id="val-mark-size" class="font-mono font-bold text-teal-700 dark:text-teal-300">65%</span>
+                                </div>
+                                <input id="inp-mark-size" type="range" min="20" max="95" step="1" value="65" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span id="lbl-mark-depth" class="text-slate-600 dark:text-slate-300">Profondeur / Hauteur</span>
+                                    <span id="val-mark-depth" class="font-mono font-bold text-teal-700 dark:text-teal-300">0.4 mm</span>
+                                </div>
+                                <input id="inp-mark-depth" type="range" min="0.2" max="2.5" step="0.1" value="0.4" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span id="lbl-mark-rot" class="text-slate-600 dark:text-slate-300">Rotation</span>
+                                    <span id="val-mark-rot" class="font-mono font-bold text-teal-700 dark:text-teal-300">0°</span>
+                                </div>
+                                <input id="inp-mark-rot" type="range" min="-180" max="180" step="5" value="0" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. EXPORTATION (.STL & .OBJ) -->
+            <div class="liquid-glass-subtle rounded-2xl overflow-hidden">
+                <button type="button" class="accordion-trigger w-full p-3.5 flex items-center justify-between text-left font-semibold text-sm text-slate-900 dark:text-white hover:bg-white/30 dark:hover:bg-white/5 transition" data-target="sec-5">
+                    <span id="sec5-title">5. Exportation (.STL & .OBJ)</span>
+                    <svg class="accordion-arrow w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="sec-5" class="accordion-content px-3.5 pb-4 pt-2.5 space-y-3 border-t border-slate-400/20">
+                    <div class="space-y-2">
+                        <div class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider" id="lbl-stl-group">Format Standard (.STL)</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-export-jar" type="button" class="py-2 px-3 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 hover:from-sky-300 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 ring-1 ring-white/60 flex items-center justify-center gap-1.5 transition">
+                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span id="lbl-export-jar">Bocal (.STL)</span>
+                            </button>
+                            <button id="btn-export-lid" type="button" class="py-2 px-3 rounded-full bg-gradient-to-b from-indigo-400 to-blue-600 hover:from-indigo-300 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 ring-1 ring-white/50 flex items-center justify-center gap-1.5 transition">
+                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span id="lbl-export-lid">Couvercle (.STL)</span>
+                            </button>
+                        </div>
+                        <button id="btn-export-both" type="button" class="w-full py-2 px-3 rounded-full liquid-pill hover:bg-white/85 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition">
+                            <svg class="w-4 h-4 text-teal-600 dark:text-teal-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                            </svg>
+                            <span id="lbl-export-both">Plateau complet (.STL)</span>
+                        </button>
+                    </div>
+
+                    <div class="pt-2.5 border-t border-slate-400/20 space-y-2">
+                        <div class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider" id="lbl-obj-group">Format Multi-couleurs (.OBJ)</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-export-jar-obj" type="button" class="py-2 px-3 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 hover:from-emerald-300 hover:to-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-500/20 ring-1 ring-white/50 flex items-center justify-center gap-1.5 transition" title="Exporter le bocal avec couleurs (.OBJ)">
+                                <span id="lbl-export-jar-obj">Bocal .OBJ</span>
+                            </button>
+                            <button id="btn-export-lid-obj" type="button" class="py-2 px-3 rounded-full bg-gradient-to-b from-teal-400 to-teal-600 hover:from-teal-300 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-teal-500/20 ring-1 ring-white/50 flex items-center justify-center gap-1.5 transition" title="Exporter le couvercle avec couleurs (.OBJ)">
+                                <span id="lbl-export-lid-obj">Couvercle .OBJ</span>
+                            </button>
+                        </div>
+                        <button id="btn-export-both-obj" type="button" class="w-full py-2 px-3 rounded-full liquid-pill hover:bg-white/85 dark:hover:bg-slate-700/80 text-emerald-700 dark:text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition" title="Exporter les 2 pièces avec couleurs (.OBJ)">
+                            <span id="lbl-export-both-obj">Plateau complet (.OBJ)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ZONE D'APERÇU 3D (Liquid Glass Frame) -->
+    <main class="relative z-10 flex-1 h-[48vh] md:h-full liquid-glass rounded-3xl overflow-hidden">
+        <div id="canvas-container" class="w-full h-full"></div>
+
+        <!-- Barre supérieure des modes de vue -->
+        <div class="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <div class="flex items-center gap-1 bg-slate-900/10 dark:bg-white/10 backdrop-blur-xl p-1 rounded-full border border-white/60 dark:border-white/15 shadow-lg pointer-events-auto">
+                <button type="button" class="view-mode-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm transition" data-mode="exploded" id="btn-view-exploded">Éclaté</button>
+                <button type="button" class="view-mode-btn px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition" data-mode="closed" id="btn-view-closed">Fermé</button>
+                <button type="button" class="view-mode-btn px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition" data-mode="plate" id="btn-view-plate">Plateau 3D</button>
+            </div>
+
+            <div class="flex items-center gap-2.5 liquid-pill px-3.5 py-1.5 rounded-full shadow-lg pointer-events-auto text-xs text-slate-800 dark:text-slate-100">
+                <label class="flex items-center gap-1.5 cursor-pointer font-semibold">
+                    <input id="chk-wireframe" type="checkbox" class="rounded accent-teal-500">
+                    <span id="lbl-wireframe">Filaire</span>
+                </label>
+                <span class="opacity-40">|</span>
+                <label class="flex items-center gap-1.5 cursor-pointer font-semibold">
+                    <input id="chk-section" type="checkbox" class="rounded accent-teal-500">
+                    <span id="lbl-section">Coupe (Section)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Glisseur de position de coupe (visible uniquement quand Coupe est activé) -->
+        <div id="clip-slider-panel" class="hidden absolute top-16 right-3 liquid-glass p-3.5 rounded-2xl w-64 z-10 space-y-2.5 text-slate-900 dark:text-white">
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span id="lbl-clip-pos" class="font-semibold">Position de la coupe</span>
+                    <span id="val-clip-pos" class="font-mono font-bold text-teal-700 dark:text-teal-300">0%</span>
+                </div>
+                <input id="inp-clip-pos" type="range" min="-100" max="100" step="1" value="0" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+            </div>
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span id="lbl-clip-rot" class="font-semibold">Rotation de la coupe</span>
+                    <span id="val-clip-rot" class="font-mono font-bold text-teal-700 dark:text-teal-300">0°</span>
+                </div>
+                <input id="inp-clip-rot" type="range" min="-180" max="180" step="1" value="0" class="w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70">
+            </div>
+        </div>
+
+        <!-- Barre d'état inférieure -->
+        <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 text-[11px] pointer-events-none">
+            <div class="liquid-pill px-3.5 py-1.5 rounded-full flex items-center gap-2 text-slate-800 dark:text-slate-100 font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span id="status-text">Prêt • Maillage fermé (Manifold)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="liquid-pill px-3.5 py-1.5 rounded-full flex items-center gap-3 font-semibold text-slate-800 dark:text-slate-100">
+                    <span id="est-weight" class="flex items-center gap-1 text-sky-700 dark:text-sky-300" title="Poids estimé (PLA 1.24 g/cm³)">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+                        </svg>
+                        <span>0 g</span>
+                    </span>
+                    <span class="opacity-35">|</span>
+                    <span id="est-time" class="flex items-center gap-1 text-teal-700 dark:text-teal-300" title="Temps d'impression estimé (A1 / A1 Mini, couche 0.20 mm)">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>0 min</span>
+                    </span>
+                    <span class="opacity-35">|</span>
+                    <span id="est-cost" class="flex items-center gap-1 text-amber-700 dark:text-amber-300" title="Coût filament estimé (20 $ / kg)">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>~0.00 $</span>
+                    </span>
+                </div>
+                <div class="liquid-pill px-3.5 py-1.5 rounded-full font-mono text-slate-700 dark:text-slate-200 hidden sm:block" id="poly-count">
+                    0 triangles
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODALE PRÉFÉRENCES (Liquid Glass) -->
+    <div id="prefs-modal" class="hidden fixed inset-0 bg-slate-950/35 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="liquid-glass rounded-3xl max-w-sm w-full p-6 space-y-5 text-slate-900 dark:text-white">
+            <div class="flex items-center justify-between border-b border-slate-400/20 pb-3.5">
+                <h2 id="prefs-modal-title" class="font-bold text-base">Préférences</h2>
+                <button id="btn-close-prefs" type="button" class="p-1.5 rounded-full hover:bg-white/50 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-3.5 text-xs">
+                <div>
+                    <label id="lbl-pref-theme" class="block font-semibold mb-1.5 text-slate-600 dark:text-slate-300">Thème d'affichage</label>
+                    <select id="pref-theme" class="w-full p-2.5 rounded-2xl liquid-input font-medium focus:outline-none focus:border-teal-500">
+                        <option value="auto">Automatique (Système)</option>
+                        <option value="dark">Foncé</option>
+                        <option value="light">Pâle</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label id="lbl-pref-lang" class="block font-semibold mb-1.5 text-slate-600 dark:text-slate-300">Langue de l'interface</label>
+                    <select id="pref-lang" class="w-full p-2.5 rounded-2xl liquid-input font-medium focus:outline-none focus:border-teal-500">
+                        <option value="fr">Français</option>
+                        <option value="en">English</option>
+                        <option value="pt">Português (Brasil)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label id="lbl-pref-unit" class="block font-semibold mb-1.5 text-slate-600 dark:text-slate-300">Unité de mesure</label>
+                    <select id="pref-unit" class="w-full p-2.5 rounded-2xl liquid-input font-medium focus:outline-none focus:border-teal-500">
+                        <option value="mm">Millimètres (MM)</option>
+                        <option value="in">Pouces (IN)</option>
+                        <option value="px">Pixels (PX - 96 DPI)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label id="lbl-pref-plate" class="block font-semibold mb-1.5 text-slate-600 dark:text-slate-300">Dimensions du plateau</label>
+                    <select id="pref-plate" class="w-full p-2.5 rounded-2xl liquid-input font-medium focus:outline-none focus:border-teal-500">
+                        <option value="256">A1 (256 × 256 mm)</option>
+                        <option value="180">A1 Mini (180 × 180 mm)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button id="btn-save-prefs" type="button" class="px-5 py-2.5 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 hover:from-sky-300 hover:to-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/25 ring-1 ring-white/60">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE AIDE / GUIDE D'UTILISATION (Liquid Glass) -->
+    <div id="help-modal" class="hidden fixed inset-0 bg-slate-950/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="liquid-glass rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden text-slate-900 dark:text-white">
+            <div class="flex items-center justify-between border-b border-slate-400/20 px-6 py-4 shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-teal-500 flex items-center justify-center text-white shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <h2 id="help-modal-title" class="font-bold text-base">Guide d'utilisation — Générateur Bocal</h2>
+                </div>
+                <button id="btn-close-help" type="button" class="p-1.5 rounded-full hover:bg-white/50 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="help-modal-body" class="p-6 overflow-y-auto space-y-4 text-xs leading-relaxed text-slate-700 dark:text-slate-200">
+                <!-- Contenu injecté dynamiquement selon la langue -->
+            </div>
+
+            <div class="border-t border-slate-400/20 px-6 py-3.5 flex justify-end shrink-0">
+                <button id="btn-close-help-bottom" type="button" class="px-5 py-2 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 hover:from-sky-300 hover:to-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/25 ring-1 ring-white/60">
+                    Compris
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE D'ACCUEIL À L'OUVERTURE (Liquid Glass) -->
+    <div id="welcome-modal" class="hidden fixed inset-0 bg-slate-950/45 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="liquid-glass rounded-3xl max-w-xl w-full max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-white">
+            <div class="flex items-center justify-between border-b border-slate-400/20 px-6 py-4 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 aspect-square shrink-0 rounded-xl bg-gradient-to-br from-sky-400 via-teal-400 to-emerald-500 flex items-center justify-center text-white shadow-lg shadow-teal-500/25 ring-1 ring-white/60">
+                        <svg class="w-5 h-5 drop-shadow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="7" y="3" width="10" height="3" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 6v1.5c0 .4-.3.8-.7 1l-1.6.8c-.7.3-1.2 1-1.2 1.8v7.7c0 1.2 1 2.2 2.2 2.2h9.6c1.2 0 2.2-1 2.2-2.2v-7.7c0-.8-.5-1.5-1.2-1.8l-1.6-.8c-.4-.2-.7-.6-.7-1V6"/>
+                            <path stroke-linecap="round" d="M5.5 13h13"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 id="welcome-modal-title" class="font-bold text-base leading-tight">Bienvenue dans Générateur Bocal</h2>
+                        <p id="welcome-modal-sub" class="text-[11px] text-slate-600 dark:text-slate-300">Outil de conception 3D paramétrique sans support</p>
+                    </div>
+                </div>
+                <button id="btn-close-welcome-x" type="button" class="p-1.5 rounded-full hover:bg-white/50 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="welcome-modal-body" class="p-6 overflow-y-auto space-y-3.5 text-xs leading-relaxed text-slate-700 dark:text-slate-200">
+                <!-- Contenu injecté dynamiquement selon la langue -->
+            </div>
+
+            <div class="border-t border-slate-400/20 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                    <input id="chk-welcome-dont-show" type="checkbox" class="rounded accent-teal-500">
+                    <span id="lbl-welcome-dont-show">Ne plus afficher au démarrage</span>
+                </label>
+                <button id="btn-close-welcome" type="button" class="px-5 py-2 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 hover:from-sky-300 hover:to-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/25 ring-1 ring-white/60">
+                    Commencer la création
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOÎTE DE MESSAGE (Notification sans alert()) -->
+    <div id="toast-box" class="hidden fixed bottom-14 right-4 z-50 border border-emerald-400/60 bg-emerald-950/85 backdrop-blur-xl text-emerald-100 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 transition-all">
+        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span id="toast-msg">Fichier STL généré !</span>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. TRADUCTIONS, UNITÉS & PRÉFÉRENCES
+        // ==========================================
+        const state = {
+            lang: 'fr',
+            theme: 'auto',
+            unit: 'mm',
+            plateSize: 256,
+            lidMarkMode: 'engrave', // 'engrave' | 'outline' | 'emboss'
+            lidLogoImage: null,
+            lidLogoMap: null,
+            lidLogoRes: 0,
+            sections: [
+                {
+                    id: 1,
+                    weight: 100,
+                    radialOffset: 0,
+                    bevel: 1.5,
+                    texType: 'smooth',
+                    texDepth: 0.8,
+                    texFreq: 28,
+                    twistAngle: 45,
+                    color: '#e2e8f0'
+                }
+            ]
+        };
+
+        const translations = {
+            fr: {
+                appTitle: 'Générateur Bocal',
+                appSubtitle: 'Conception paramétrique',
+                helpBtn: 'Aide',
+                helpTitle: 'Guide d\'utilisation — Générateur Bocal',
+                helpGotIt: 'Compris',
+                welcomeTitle: 'Bienvenue dans Générateur Bocal',
+                welcomeSub: 'Outil de conception 3D paramétrique prêt à imprimer',
+                welcomeDontShow: 'Ne plus afficher au démarrage',
+                welcomeStart: 'Commencer la création',
+                welcomeHtml: `
+                    <p><strong>Générateur Bocal</strong> crée des bocaux et couvercles vissables sur mesure, prêts pour l'<strong>impression 3D sans support</strong>.</p>
+                    <ul class="list-disc pl-4 space-y-1.5">
+                        <li><strong>Personnalisation complète :</strong> dimensions (volume en mL), jusqu'à 4 sections texturées, pas de vis ajustable et gravure texte ou logo <strong>.SVG</strong> sur le couvercle.</li>
+                        <li><strong>Aperçu 3D :</strong> vue éclatée, fermée, plateau 3D et coupe transversale.</li>
+                        <li><strong>Exportation :</strong> fichiers <strong>.STL</strong> (standard) ou <strong>.OBJ</strong> (multi-couleurs AMS).</li>
+                    </ul>
+                `,
+                helpHtml: `
+                    <div class="p-3.5 rounded-2xl bg-white/45 dark:bg-slate-950/35 border border-white/50 dark:border-white/10 space-y-1.5">
+                        <h3 class="font-bold text-sm text-teal-700 dark:text-teal-300">Vue d'ensemble</h3>
+                        <p>Cet outil permet de concevoir sur mesure un <strong>bocal à visser et son couvercle fileté</strong> prêts pour l'impression 3D sans support. Tous les maillages générés sont fermés (<em>Manifold</em>) et orientés pour votre trancheur (Bambu Studio, OrcaSlicer, PrusaSlicer, Cura).</p>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">1. Dimensions générales</h4>
+                            <p>Réglez le diamètre extérieur, la hauteur du bocal, l'épaisseur des parois, la hauteur du couvercle et le chanfrein de base. L'encadré <strong>Dimensions intérieures utiles</strong> calcule automatiquement la largeur intérieure, la hauteur disponible et la contenance exacte en millilitres (mL).</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">2. Silhouette & sections</h4>
+                            <p>Choisissez une silhouette globale (Cylindre, Amphore, Sablier, Conique, Épaulé) et empilez jusqu'à <strong>4 sections indépendantes</strong>. Chaque section dispose de sa propre couleur, hauteur relative, largeur, texture de surface (lisse, cannelures, moletage diamant, anneaux, torsade, facettes polygonales) et biseau de jonction.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">3. Paramètres du filetage</h4>
+                            <p>Ajustez le nombre de tours, le pas de vis et la profondeur du filet. Le <strong>jeu mécanique</strong> (0,35 mm par défaut) applique automatiquement la tolérance entre le goulot et le couvercle pour garantir un vissage fluide après impression.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">4. Style, texture & marquage du couvercle</h4>
+                            <p>Personnalisez la couleur, le biseau supérieur et la texture de prise en main du couvercle. Vous pouvez également ajouter un <strong>texte personnalisé</strong> (7 polices) ou importer un <strong>logo vectoriel (.SVG)</strong> en <em>Gravure</em>, <em>Contour</em> ou <em>Relief</em>.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">5. Contrôles 3D, Coupe & Exportation (.STL / .OBJ)</h4>
+                            <ul class="list-disc pl-4 space-y-1">
+                                <li><strong>Navigation 3D :</strong> Clic gauche pour pivoter, molette pour zoomer, clic droit pour déplacer la caméra.</li>
+                                <li><strong>Modes de vue :</strong> Basculez entre <em>Éclaté</em>, <em>Fermé</em> et <em>Plateau 3D</em> (où le couvercle est retourné à plat, prêt à imprimer sans support).</li>
+                                <li><strong>Coupe (Section) :</strong> Activez la vue en coupe pour vérifier le jeu mécanique du filetage et l'épaisseur des parois.</li>
+                                <li><strong>Exportation :</strong> Téléchargez les pièces séparément ou ensemble en <strong>.STL</strong> (standard) ou en <strong>.OBJ</strong> (multi-couleurs pour AMS).</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                prefsBtn: 'Préférences',
+                sec1Title: (u) => `1. Dimensions générales (${u.toUpperCase()})`,
+                sec2Title: '2. Silhouette & sections',
+                sec3Title: '3. Paramètres du filetage',
+                sec4Title: '4. Style & texture du couvercle',
+                sec5Title: '5. Exportation (.STL & .OBJ)',
+                stlGroup: 'Format Standard (.STL)',
+                objGroup: 'Format Multi-couleurs (.OBJ)',
+                diameter: 'Diamètre extérieur',
+                jarHeight: 'Hauteur du bocal',
+                wall: 'Épaisseur des parois',
+                lidHeight: 'Hauteur du couvercle',
+                baseBevel: 'Biseau à la base du bocal',
+                innerDimsTitle: 'Dimensions intérieures utiles',
+                innerWidth: 'Largeur int. (corps / col)',
+                innerHeight: 'Hauteur intérieure',
+                innerVolume: 'Volume disponible',
+                silhouette: 'Silhouette globale',
+                silAmp: 'Amplitude de la courbure',
+                addSection: 'Ajouter une section',
+                sectionLabel: 'Section',
+                secHeightPct: 'Hauteur relative (%)',
+                secWidthOffset: 'Largeur section (décalage)',
+                secBevel: 'Biseau / Jonction',
+                secTexture: 'Texture de la section',
+                texDepth: 'Relief de texture',
+                texFreq: 'Fréquence / Répétitions',
+                twistAngle: 'Degré de torsade',
+                turns: 'Nombre de tours',
+                turnsUnit: 'tours',
+                pitch: 'Pas de vis (espacement)',
+                threadDepth: 'Profondeur du filet',
+                clearance: 'Jeu mécanique (tolérance 3D)',
+                lidColor: 'Couleur du couvercle',
+                lidBevel: 'Biseau supérieur',
+                lidTex: 'Texture du couvercle',
+                lidMarkType: 'Marquage sur le dessus du couvercle',
+                markEngrave: 'Gravure',
+                markOutline: 'Contour',
+                markEmboss: 'Relief',
+                outlineWidth: 'Épaisseur du contour',
+                uploadLogo: 'Choisir un fichier SVG (.svg)',
+                logoInvert: 'Inverser les couleurs (fond clair)',
+                markSize: 'Taille du motif',
+                markDepth: 'Profondeur / Hauteur',
+                markRot: 'Rotation',
+                exportJar: 'Bocal (.STL)',
+                exportLid: 'Couvercle (.STL)',
+                exportBoth: 'Plateau complet (.STL)',
+                exportJarObj: 'Bocal .OBJ',
+                exportLidObj: 'Couvercle .OBJ',
+                exportBothObj: 'Plateau complet (.OBJ)',
+                viewExploded: 'Éclaté',
+                viewClosed: 'Fermé',
+                viewPlate: 'Plateau 3D',
+                wireframe: 'Filaire',
+                sectionCut: 'Coupe (Section)',
+                clipPos: 'Position de la coupe',
+                clipRot: 'Rotation de la coupe',
+                statusReady: 'Prêt • Maillage fermé (Manifold)',
+                prefsTitle: 'Préférences',
+                prefTheme: "Thème d'affichage",
+                prefLang: "Langue de l'interface",
+                prefUnit: 'Unité de mesure',
+                prefPlate: 'Dimensions du plateau',
+                plateOverflow: (p) => `Attention : dépasse le plateau (${p}×${p} mm)`,
+                closeBtn: 'Fermer'
+            },
+            en: {
+                appTitle: '3D Screw Jar Generator',
+                appSubtitle: 'Parametric Design',
+                helpBtn: 'Help',
+                helpTitle: 'User Guide — 3D Screw Jar Generator',
+                helpGotIt: 'Got it',
+                welcomeTitle: 'Welcome to 3D Screw Jar Generator',
+                welcomeSub: 'Parametric 3D design tool ready for printing',
+                welcomeDontShow: 'Do not show again on startup',
+                welcomeStart: 'Start Designing',
+                welcomeHtml: `
+                    <p><strong>3D Screw Jar Generator</strong> creates custom screw-top jars and threaded lids engineered for <strong>support-free 3D printing</strong>.</p>
+                    <ul class="list-disc pl-4 space-y-1.5">
+                        <li><strong>Full Customization:</strong> exact sizing (volume in mL), up to 4 textured sections, adjustable threads, and custom text or <strong>.SVG</strong> lid engraving.</li>
+                        <li><strong>3D Inspection:</strong> exploded, closed, print plate, and cross-section views.</li>
+                        <li><strong>Export:</strong> standard <strong>.STL</strong> or multi-color <strong>.OBJ</strong> (AMS) files.</li>
+                    </ul>
+                `,
+                helpHtml: `
+                    <div class="p-3.5 rounded-2xl bg-white/45 dark:bg-slate-950/35 border border-white/50 dark:border-white/10 space-y-1.5">
+                        <h3 class="font-bold text-sm text-teal-700 dark:text-teal-300">Overview</h3>
+                        <p>This parametric tool lets you design a custom <strong>screw-top jar and threaded lid</strong> ready for support-free 3D printing. Every generated mesh is watertight (<em>Manifold</em>) and properly oriented (Z-up) for Bambu Studio, OrcaSlicer, PrusaSlicer, and Cura.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">1. General Dimensions</h4>
+                            <p>Set outer diameter, jar height, wall thickness, lid height, and base chamfer. The <strong>Usable Interior Dimensions</strong> box calculates inner width, inner height, and exact capacity in milliliters (mL) in real time.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">2. Silhouette & Sections</h4>
+                            <p>Pick an overall profile (Cylinder, Amphora, Hourglass, Tapered, Shouldered) and stack up to <strong>4 independent sections</strong>, each with its own color, height ratio, width offset, surface texture (smooth, flutes, diamond knurl, rings, helical twist, polygonal facets), and seam bevel.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">3. Thread Parameters</h4>
+                            <p>Customize thread turns, pitch, and depth. The <strong>mechanical clearance</strong> (0.35 mm default) automatically offsets the lid thread so both parts screw together smoothly off the print bed.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">4. Lid Style, Texture & Top Marking</h4>
+                            <p>Customize lid color, top chamfer, and grip texture. You can also add <strong>custom text</strong> or upload a vector <strong>.SVG logo</strong> rendered as <em>Engrave</em>, <em>Outline</em>, or <em>Emboss</em>.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">5. 3D Controls, Cross-Section & Export (.STL / .OBJ)</h4>
+                            <ul class="list-disc pl-4 space-y-1">
+                                <li><strong>3D Viewport:</strong> Left-click drag to orbit, scroll wheel to zoom, right-click drag to pan.</li>
+                                <li><strong>View Modes:</strong> Switch between <em>Exploded</em>, <em>Closed</em>, and <em>3D Print Plate</em> (lid flipped flat for support-free printing).</li>
+                                <li><strong>Cross-Section:</strong> Enable the clipping plane to inspect thread clearance and wall thickness.</li>
+                                <li><strong>Export:</strong> Download parts individually or together in <strong>.STL</strong> (standard) or <strong>.OBJ</strong> (multi-color for AMS).</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                prefsBtn: 'Preferences',
+                sec1Title: (u) => `1. General Dimensions (${u.toUpperCase()})`,
+                sec2Title: '2. Silhouette & Sections',
+                sec3Title: '3. Thread Parameters',
+                sec4Title: '4. Lid Style & Texture',
+                sec5Title: '5. Export (.STL & .OBJ)',
+                stlGroup: 'Standard Format (.STL)',
+                objGroup: 'Multi-Color Format (.OBJ)',
+                diameter: 'Outer Diameter',
+                jarHeight: 'Jar Height',
+                wall: 'Wall Thickness',
+                lidHeight: 'Lid Height',
+                baseBevel: 'Base Chamfer',
+                innerDimsTitle: 'Usable Interior Dimensions',
+                innerWidth: 'Inner Width (body / neck)',
+                innerHeight: 'Inner Height',
+                innerVolume: 'Available Volume',
+                silhouette: 'Overall Silhouette',
+                silAmp: 'Curve Amplitude',
+                addSection: 'Add Section',
+                sectionLabel: 'Section',
+                secHeightPct: 'Relative Height (%)',
+                secWidthOffset: 'Section Width Offset',
+                secBevel: 'Seam Bevel / Transition',
+                secTexture: 'Section Texture',
+                texDepth: 'Texture Depth',
+                texFreq: 'Frequency / Repeats',
+                twistAngle: 'Twist Angle',
+                turns: 'Thread Turns',
+                turnsUnit: 'turns',
+                pitch: 'Thread Pitch',
+                threadDepth: 'Thread Depth',
+                clearance: 'Mechanical Clearance',
+                lidColor: 'Lid Color',
+                lidBevel: 'Top Bevel',
+                lidTex: 'Lid Texture',
+                lidMarkType: 'Top Lid Engraving / Logo',
+                markEngrave: 'Engrave',
+                markOutline: 'Outline',
+                markEmboss: 'Emboss',
+                outlineWidth: 'Outline Thickness',
+                uploadLogo: 'Choose SVG File (.svg)',
+                logoInvert: 'Invert colors (light background)',
+                markSize: 'Pattern Size',
+                markDepth: 'Depth / Height',
+                markRot: 'Rotation',
+                exportJar: 'Jar (.STL)',
+                exportLid: 'Lid (.STL)',
+                exportBoth: 'Build Plate (.STL)',
+                exportJarObj: 'Jar .OBJ',
+                exportLidObj: 'Lid .OBJ',
+                exportBothObj: 'Build Plate (.OBJ)',
+                viewExploded: 'Exploded',
+                viewClosed: 'Closed',
+                viewPlate: '3D Print Plate',
+                wireframe: 'Wireframe',
+                sectionCut: 'Cross-Section',
+                clipPos: 'Cut Position',
+                clipRot: 'Cut Rotation',
+                statusReady: 'Ready • Watertight Manifold Mesh',
+                prefsTitle: 'Preferences',
+                prefTheme: 'Color Theme',
+                prefLang: 'Language',
+                prefUnit: 'Measurement Unit',
+                prefPlate: 'Build Plate Dimensions',
+                plateOverflow: (p) => `Warning: exceeds build plate (${p}×${p} mm)`,
+                closeBtn: 'Close'
+            },
+            pt: {
+                appTitle: 'Gerador de Pote 3D',
+                appSubtitle: 'Design Paramétrico',
+                helpBtn: 'Ajuda',
+                helpTitle: 'Guia de Uso — Gerador de Pote 3D',
+                helpGotIt: 'Entendi',
+                welcomeTitle: 'Bem-vindo ao Gerador de Pote 3D',
+                welcomeSub: 'Ferramenta paramétrica pronta para impressão 3D',
+                welcomeDontShow: 'Não mostrar novamente ao iniciar',
+                welcomeStart: 'Começar a criar',
+                welcomeHtml: `
+                    <p>O <strong>Gerador de Pote 3D</strong> cria potes e tampas rosqueáveis sob medida para <strong>impressão 3D sem suportes</strong>.</p>
+                    <ul class="list-disc pl-4 space-y-1.5">
+                        <li><strong>Personalização completa:</strong> dimensões (volume em mL), até 4 seções texturizadas, rosca ajustável e texto ou logo <strong>.SVG</strong> na tampa.</li>
+                        <li><strong>Inspeção 3D:</strong> vistas explodida, fechada, mesa 3D e corte transversal.</li>
+                        <li><strong>Exportação:</strong> arquivos <strong>.STL</strong> (padrão) ou <strong>.OBJ</strong> (multicores AMS).</li>
+                    </ul>
+                `,
+                helpHtml: `
+                    <div class="p-3.5 rounded-2xl bg-white/45 dark:bg-slate-950/35 border border-white/50 dark:border-white/10 space-y-1.5">
+                        <h3 class="font-bold text-sm text-teal-700 dark:text-teal-300">Visão Geral</h3>
+                        <p>Esta ferramenta paramétrica permite criar um <strong>pote com tampa rosqueável</strong> pronto para impressão 3D sem suportes. Todas as malhas são fechadas (<em>Manifold</em>) e orientadas no eixo Z para Bambu Studio, OrcaSlicer, PrusaSlicer e Cura.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">1. Dimensões Gerais</h4>
+                            <p>Ajuste o diâmetro externo, altura do pote, espessura da parede, altura da tampa e chanfro da base. O painel <strong>Dimensões Internas Úteis</strong> calcula em tempo real a largura interna, altura e volume em mililitros (mL).</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">2. Silhueta e Seções</h4>
+                            <p>Escolha a silhueta geral e combine até <strong>4 seções independentes</strong> com cores, alturas, larguras e texturas próprias (liso, caneluras, recartilhado diamante, anéis, torção ou facetas poligonais).</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">3. Parâmetros da Rosca</h4>
+                            <p>Configure voltas, passo e profundidade da rosca. A <strong>folga mecânica</strong> (0,35 mm padrão) garante que a tampa rosqueie suavemente após a impressão.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">4. Estilo e Gravação na Tampa</h4>
+                            <p>Personalize a cor, chanfro e textura da tampa, além de adicionar <strong>texto personalizado</strong> ou um <strong>logotipo vetorial (.SVG)</strong> em <em>Gravação</em>, <em>Contorno</em> ou <em>Relevo</em>.</p>
+                        </div>
+                        <div class="p-3.5 rounded-2xl bg-white/35 dark:bg-slate-950/25 border border-white/40 dark:border-white/10">
+                            <h4 class="font-bold text-slate-900 dark:text-white mb-1">5. Visualização 3D, Corte e Exportação (.STL / .OBJ)</h4>
+                            <ul class="list-disc pl-4 space-y-1">
+                                <li><strong>Controles 3D:</strong> Botão esquerdo gira, roda aproxima e botão direito move a câmera.</li>
+                                <li><strong>Modos de Vista:</strong> Alterne entre <em>Explodido</em>, <em>Fechado</em> e <em>Mesa 3D</em>.</li>
+                                <li><strong>Corte (Seção):</strong> Inspecione a folga da rosca e a espessura das paredes internamente.</li>
+                                <li><strong>Exportação:</strong> Baixe em <strong>.STL</strong> (padrão) ou <strong>.OBJ</strong> (multicores para AMS).</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                prefsBtn: 'Preferências',
+                sec1Title: (u) => `1. Dimensões Gerais (${u.toUpperCase()})`,
+                sec2Title: '2. Silhueta e Seções',
+                sec3Title: '3. Parâmetros da Rosca',
+                sec4Title: '4. Estilo e Textura da Tampa',
+                sec5Title: '5. Exportação (.STL & .OBJ)',
+                stlGroup: 'Formato Padrão (.STL)',
+                objGroup: 'Formato Multicores (.OBJ)',
+                diameter: 'Diâmetro Externo',
+                jarHeight: 'Altura do Pote',
+                wall: 'Espessura da Parede',
+                lidHeight: 'Altura da Tampa',
+                baseBevel: 'Chanfro da Base',
+                innerDimsTitle: 'Dimensões Internas Úteis',
+                innerWidth: 'Largura Int. (corpo / bocal)',
+                innerHeight: 'Altura Interna',
+                innerVolume: 'Volume Disponível',
+                silhouette: 'Silhueta Geral',
+                silAmp: 'Amplitude da Curva',
+                addSection: 'Adicionar Seção',
+                sectionLabel: 'Seção',
+                secHeightPct: 'Altura Relativa (%)',
+                secWidthOffset: 'Largura da Seção (Desloc.)',
+                secBevel: 'Chanfro / Junção',
+                secTexture: 'Textura da Seção',
+                texDepth: 'Relevo da Textura',
+                texFreq: 'Frequência / Repetições',
+                twistAngle: 'Grau de Torção',
+                turns: 'Número de Voltas',
+                turnsUnit: 'voltas',
+                pitch: 'Passo da Rosca',
+                threadDepth: 'Profundidade da Rosca',
+                clearance: 'Folga Mecânica (Tolerância)',
+                lidColor: 'Cor da Tampa',
+                lidBevel: 'Chanfro Superior',
+                lidTex: 'Textura da Tampa',
+                lidMarkType: 'Gravação / Logo no Topo da Tampa',
+                markEngrave: 'Gravação',
+                markOutline: 'Contorno',
+                markEmboss: 'Relevo',
+                outlineWidth: 'Espessura do Contorno',
+                uploadLogo: 'Escolher Arquivo SVG (.svg)',
+                logoInvert: 'Inverter cores (fundo claro)',
+                markSize: 'Tamanho do Desenho',
+                markDepth: 'Profundidade / Altura',
+                markRot: 'Rotação',
+                exportJar: 'Pote (.STL)',
+                exportLid: 'Tampa (.STL)',
+                exportBoth: 'Mesa Completa (.STL)',
+                exportJarObj: 'Pote .OBJ',
+                exportLidObj: 'Tampa .OBJ',
+                exportBothObj: 'Mesa Completa (.OBJ)',
+                viewExploded: 'Explodido',
+                viewClosed: 'Fechado',
+                viewPlate: 'Mesa 3D',
+                wireframe: 'Aramado',
+                sectionCut: 'Corte (Seção)',
+                clipPos: 'Posição do Corte',
+                clipRot: 'Rotação do Corte',
+                statusReady: 'Pronto • Malha Fechada (Manifold)',
+                prefsTitle: 'Preferências',
+                prefTheme: 'Tema de Cores',
+                prefLang: 'Idioma',
+                prefUnit: 'Unidade de Medida',
+                prefPlate: 'Dimensões da Mesa',
+                plateOverflow: (p) => `Aviso: excede a mesa (${p}×${p} mm)`,
+                closeBtn: 'Fechar'
+            }
+        };
+
+        function t(key) {
+            return translations[state.lang][key] || key;
+        }
+
+        function formatDim(mmVal) {
+            if (state.unit === 'in') {
+                return `${(mmVal / 25.4).toFixed(3)} in`;
+            } else if (state.unit === 'px') {
+                return `${Math.round(mmVal * (96 / 25.4))} px`;
+            }
+            return `${mmVal.toFixed(1)} mm`;
+        }
+
+        function showToast(msg) {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-msg').textContent = msg;
+            box.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => box.classList.add('hidden'), 3000);
+        }
+
+        // ==========================================
+        // 2. INITIALISATION DE LA SCÈNE THREE.JS
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.5, 2000);
+        camera.position.set(140, 130, 175);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, stencil: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.localClippingEnabled = true;
+        renderer.sortObjects = false;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.set(0, 55, 0);
+
+        // Éclairage de la scène
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.58);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight1.position.set(120, 200, 140);
+        dirLight1.castShadow = true;
+        dirLight1.shadow.mapSize.width = 2048;
+        dirLight1.shadow.mapSize.height = 2048;
+        dirLight1.shadow.bias = -0.0005;
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0x93c5fd, 0.45);
+        dirLight2.position.set(-140, 80, -120);
+        scene.add(dirLight2);
+
+        // Grille de référence au sol (plateau d'impression dynamique A1 / A1 Mini)
+        let gridHelper = null;
+        let plateBorderLine = null;
+
+        function rebuildBuildPlateGrid() {
+            if (gridHelper) {
+                scene.remove(gridHelper);
+                gridHelper.geometry.dispose();
+                gridHelper.material.dispose();
+            }
+            if (plateBorderLine) {
+                scene.remove(plateBorderLine);
+                plateBorderLine.geometry.dispose();
+                plateBorderLine.material.dispose();
+            }
+
+            const size = state.plateSize || 256;
+            const divisions = size === 180 ? 12 : 16; // Carreaux de 15 mm (A1 Mini) ou 16 mm (A1)
+            const isLight = document.body.classList.contains('theme-light');
+            const subColor = isLight ? 0x64748b : 0x475569;
+
+            gridHelper = new THREE.GridHelper(size, divisions, 0x14b8a6, subColor);
+            gridHelper.material.opacity = 0.55;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            // Bordure extérieure nette délimitant le plateau
+            const half = size / 2;
+            const borderPts = [
+                new THREE.Vector3(-half, 0.05, -half),
+                new THREE.Vector3(half, 0.05, -half),
+                new THREE.Vector3(half, 0.05, half),
+                new THREE.Vector3(-half, 0.05, half),
+                new THREE.Vector3(-half, 0.05, -half)
+            ];
+            const borderGeom = new THREE.BufferGeometry().setFromPoints(borderPts);
+            const borderMat = new THREE.LineBasicMaterial({ color: 0x14b8a6 });
+            plateBorderLine = new THREE.Line(borderGeom, borderMat);
+            scene.add(plateBorderLine);
+        }
+        rebuildBuildPlateGrid();
+
+        // Variables d'état 3D
+        let jarMesh = null;
+        let lidMesh = null;
+        let jarCapMesh = null;
+        let lidCapMesh = null;
+        let currentViewMode = 'exploded';
+        let isSectionCut = false;
+        const clipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+
+        // Texture procédurale hachurée (vert lime pour le bocal, jaune pour le couvercle)
+        function createHatchTexture(isDarkTheme, bgColor = '#84cc16', reverseAngle = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 64, 64);
+
+            ctx.strokeStyle = isDarkTheme ? 'rgba(255, 255, 255, 0.9)' : 'rgba(15, 23, 42, 0.9)';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for (let i = -64; i <= 128; i += 16) {
+                if (reverseAngle) {
+                    ctx.moveTo(i, 64);
+                    ctx.lineTo(i + 64, 0);
+                } else {
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i + 64, 64);
+                }
+            }
+            ctx.stroke();
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(0.14, 0.14);
+            tex.anisotropy = 8;
+            return tex;
+        }
+
+        const jarCapMat = new THREE.MeshBasicMaterial({
+            map: createHatchTexture(true, '#84cc16', false),
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2
+        });
+
+        const lidCapMat = new THREE.MeshBasicMaterial({
+            map: createHatchTexture(true, '#facc15', true),
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2
+        });
+
+        function applyTheme() {
+            let effectiveTheme = state.theme;
+            if (effectiveTheme === 'auto') {
+                effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            const isLight = effectiveTheme === 'light';
+            if (isLight) {
+                document.body.classList.add('theme-light');
+                document.documentElement.classList.remove('dark');
+                scene.background = null;
+            } else {
+                document.body.classList.remove('theme-light');
+                document.documentElement.classList.add('dark');
+                scene.background = null;
+            }
+            rebuildBuildPlateGrid();
+
+            if (jarCapMat.map) jarCapMat.map.dispose();
+            jarCapMat.map = createHatchTexture(!isLight, '#84cc16', false);
+            jarCapMat.needsUpdate = true;
+
+            if (lidCapMat.map) lidCapMat.map.dispose();
+            lidCapMat.map = createHatchTexture(!isLight, '#facc15', true);
+            lidCapMat.needsUpdate = true;
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (state.theme === 'auto') applyTheme();
+        });
+
+        // ==========================================
+        // 3. FONCTIONS MATHÉMATIQUES & GÉOMÉTRIE 3D
+        // ==========================================
+        // Rasterisation haute définition du texte ou du logo en carte de hauteur (0.0 à 1.0)
+        function updateLidMarkHeightmap() {
+            const markType = document.getElementById('inp-lid-mark-type').value;
+            if (markType === 'none') {
+                state.lidLogoMap = null;
+                return;
+            }
+
+            const size = 2048;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, size, size);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            const scalePct = (parseFloat(document.getElementById('inp-mark-size').value) || 65) / 100;
+            const rotDeg = parseFloat(document.getElementById('inp-mark-rot').value) || 0;
+            const invert = document.getElementById('chk-logo-invert').checked;
+            const isOutline = state.lidMarkMode === 'outline';
+            const outlineMm = parseFloat(document.getElementById('inp-outline-width').value) || 0.2;
+            const outerDiam = parseFloat(document.getElementById('inp-diameter').value) || 70;
+            const strokePx = Math.max(4.0, (outlineMm / outerDiam) * size * 1.8);
+
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            // Note : le couvercle est retourné autour de l'axe X en vue Fermé/Éclaté, on corrige le miroir vertical
+            ctx.scale(1, -1);
+            ctx.rotate((rotDeg * Math.PI) / 180);
+
+            if (markType === 'text') {
+                const txt = (document.getElementById('inp-lid-mark-text').value || '').trim();
+                const fontFam = document.getElementById('inp-lid-mark-font').value || "'Open Sans', sans-serif";
+                if (txt.length > 0) {
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    let fontSize = 880;
+                    ctx.font = `bold ${fontSize}px ${fontFam}`;
+                    const measured = ctx.measureText(txt).width;
+                    const targetWidth = size * 0.85 * scalePct;
+                    if (measured > 0) {
+                        fontSize = Math.min(1040, fontSize * (targetWidth / measured));
+                    }
+                    ctx.font = `bold ${Math.max(80, fontSize)}px ${fontFam}`;
+                    if (isOutline) {
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = strokePx;
+                        ctx.lineJoin = 'round';
+                        ctx.miterLimit = 2;
+                        ctx.strokeText(txt, 0, 0);
+                    } else {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillText(txt, 0, 0);
+                    }
+                }
+            } else if (markType === 'logo' && state.lidLogoImage) {
+                const img = state.lidLogoImage;
+                const naturalW = img.naturalWidth || img.width || size;
+                const naturalH = img.naturalHeight || img.height || size;
+                const aspect = naturalW / (naturalH || 1);
+                let drawW = size * 0.85 * scalePct;
+                let drawH = drawW / aspect;
+                if (drawH > size * 0.85 * scalePct) {
+                    drawH = size * 0.85 * scalePct;
+                    drawW = drawH * aspect;
+                }
+                ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+            }
+            ctx.restore();
+
+            const imgData = ctx.getImageData(0, 0, size, size).data;
+            const rawMap = new Float32Array(size * size);
+
+            for (let i = 0; i < size * size; i++) {
+                const r = imgData[i * 4];
+                const g = imgData[i * 4 + 1];
+                const b = imgData[i * 4 + 2];
+                const a = imgData[i * 4 + 3] / 255;
+
+                if (markType === 'text') {
+                    // Courbe en S serrée pour garder des flancs quasi-verticaux tout en lissant l'anti-aliasing
+                    rawMap[i] = a < 0.25 ? 0 : (a > 0.75 ? 1 : (a - 0.25) / 0.5);
+                } else {
+                    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                    const val = invert ? (1 - lum) * a : lum * a;
+                    rawMap[i] = val < 0.25 ? 0 : (val > 0.75 ? 1 : (val - 0.25) / 0.5);
+                }
+            }
+
+            // En mode Contour sur un logo/image, extraction morphologique des bords (dilatation - érosion)
+            if (isOutline && markType === 'logo') {
+                const edgeMap = new Float32Array(size * size);
+                const rad = Math.max(3, Math.min(48, Math.round(strokePx * 0.55)));
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        let maxV = 0;
+                        let minV = 1;
+                        for (let dy = -rad; dy <= rad; dy += 3) {
+                            const ny = y + dy;
+                            if (ny < 0 || ny >= size) continue;
+                            for (let dx = -rad; dx <= rad; dx += 3) {
+                                if (dx * dx + dy * dy > rad * rad) continue;
+                                const nx = x + dx;
+                                if (nx < 0 || nx >= size) continue;
+                                const v = rawMap[ny * size + nx];
+                                if (v > maxV) maxV = v;
+                                if (v < minV) minV = v;
+                            }
+                        }
+                        edgeMap[y * size + x] = Math.max(0, maxV - minV);
+                    }
+                }
+                state.lidLogoMap = edgeMap;
+            } else {
+                state.lidLogoMap = rawMap;
+            }
+            state.lidLogoRes = size;
+        }
+
+        function sampleLidMarkHeight(x, z, maxRadius) {
+            if (!state.lidLogoMap || maxRadius <= 0) return 0;
+            const res = state.lidLogoRes;
+            const nx = (x / maxRadius) * 0.5 + 0.5;
+            const nz = (z / maxRadius) * 0.5 + 0.5;
+            if (nx < 0 || nx >= 1 || nz < 0 || nz >= 1) return 0;
+
+            // Interpolation bilinéaire douce pour éviter les effets d'escalier
+            const fx = nx * (res - 1);
+            const fz = nz * (res - 1);
+            const x0 = Math.floor(fx);
+            const z0 = Math.floor(fz);
+            const x1 = Math.min(res - 1, x0 + 1);
+            const z1 = Math.min(res - 1, z0 + 1);
+            const tx = fx - x0;
+            const tz = fz - z0;
+
+            const v00 = state.lidLogoMap[z0 * res + x0];
+            const v10 = state.lidLogoMap[z0 * res + x1];
+            const v01 = state.lidLogoMap[z1 * res + x0];
+            const v11 = state.lidLogoMap[z1 * res + x1];
+
+            return (v00 * (1 - tx) + v10 * tx) * (1 - tz) + (v01 * (1 - tx) + v11 * tx) * tz;
+        }
+
+        function getTextureDisplacement(type, u, v, height, radius, depth, freq, twistDeg) {
+            if (type === 'smooth' || depth <= 0.001) return 0;
+            const theta = u * Math.PI * 2;
+            const twistRad = (twistDeg || 0) * (Math.PI / 180);
+
+            if (type === 'flutes') {
+                return Math.cos(theta * freq) * (depth * 0.5);
+            } else if (type === 'twist') {
+                return Math.cos(theta * freq + v * twistRad) * (depth * 0.5);
+            } else if (type === 'rings') {
+                const cycles = Math.max(2, Math.round((height / 60) * freq * 0.5));
+                return Math.sin(v * Math.PI * 2 * cycles) * (depth * 0.5);
+            } else if (type === 'knurl') {
+                const k1 = Math.sin(theta * freq + v * freq * 0.6);
+                const k2 = Math.sin(theta * freq - v * freq * 0.6);
+                return (k1 * k2) * (depth * 0.65);
+            } else if (type === 'facets') {
+                const sides = Math.max(4, Math.round(freq * 0.4));
+                const sector = (Math.PI * 2) / sides;
+                const localAngle = ((theta % sector) + sector) % sector - sector / 2;
+                const polyR = radius / Math.cos(localAngle);
+                const diff = (polyR - radius);
+                return -Math.min(depth * 2.2, diff * (depth / 1.1));
+            }
+            return 0;
+        }
+
+        // Profil de filetage trapézoïdal 45° (imprimable sans support)
+        function getThreadProfile(theta, yRel, zoneH, pitch, depth) {
+            if (yRel < 0 || yRel > zoneH || zoneH <= 0) return 0;
+            // Fondu progressif aux extrémités du filet pour un engagement fluide
+            const fadeDist = Math.min(pitch * 0.45, zoneH * 0.25);
+            let env = 1.0;
+            if (yRel < fadeDist) env = yRel / fadeDist;
+            else if (yRel > zoneH - fadeDist) env = (zoneH - yRel) / fadeDist;
+
+            const phase = ((yRel / pitch) - (theta / (Math.PI * 2))) % 1;
+            const p = phase < 0 ? phase + 1 : phase;
+
+            // Onde trapézoïdale symétrique
+            let wave = 0;
+            if (p < 0.15) wave = 0;
+            else if (p < 0.35) wave = (p - 0.15) / 0.20;
+            else if (p < 0.65) wave = 1.0;
+            else if (p < 0.85) wave = 1.0 - (p - 0.65) / 0.20;
+            else wave = 0;
+
+            return wave * depth * env;
+        }
+
+        // Construction d'un solide fermé (Manifold) par révolution paramétrique
+        function buildManifoldVessel({ radialSegs, heightSegs, totalHeight, bottomThickness, getRadii, getColor, getBottomYOffset }) {
+            const positions = [];
+            const colors = [];
+            const indices = [];
+
+            const ringStride = radialSegs + 1;
+            const outerRings = heightSegs + 1;
+            const innerRings = heightSegs + 1;
+            const innerHeight = Math.max(1, totalHeight - bottomThickness);
+
+            // 1. Anneaux extérieurs (de y = 0 jusqu'à y = totalHeight)
+            for (let j = 0; j < outerRings; j++) {
+                const v = j / heightSegs;
+                const y = v * totalHeight;
+                for (let i = 0; i <= radialSegs; i++) {
+                    const u = (i % radialSegs) / radialSegs;
+                    const theta = u * Math.PI * 2;
+                    const { rOut } = getRadii(u, y);
+                    positions.push(Math.cos(theta) * rOut, y, Math.sin(theta) * rOut);
+                    const c = getColor ? getColor(u, y) : new THREE.Color(0x94a3b8);
+                    colors.push(c.r, c.g, c.b);
+                }
+            }
+
+            // 2. Anneaux intérieurs (de y = totalHeight jusqu'à y = bottomThickness)
+            const innerStartVertex = positions.length / 3;
+            for (let j = 0; j < innerRings; j++) {
+                const v = j / heightSegs;
+                const y = totalHeight - v * innerHeight;
+                for (let i = 0; i <= radialSegs; i++) {
+                    const u = (i % radialSegs) / radialSegs;
+                    const theta = u * Math.PI * 2;
+                    const { rIn } = getRadii(u, y);
+                    positions.push(Math.cos(theta) * rIn, y, Math.sin(theta) * rIn);
+                    const c = getColor ? getColor(u, y) : new THREE.Color(0x94a3b8);
+                    colors.push(c.r, c.g, c.b);
+                }
+            }
+
+            // Triangles de la paroi extérieure
+            for (let j = 0; j < heightSegs; j++) {
+                for (let i = 0; i < radialSegs; i++) {
+                    const a = j * ringStride + i;
+                    const b = a + 1;
+                    const c = (j + 1) * ringStride + i;
+                    const d = c + 1;
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+
+            // Triangles de la paroi intérieure
+            for (let j = 0; j < heightSegs; j++) {
+                for (let i = 0; i < radialSegs; i++) {
+                    const a = innerStartVertex + j * ringStride + i;
+                    const b = a + 1;
+                    const c = innerStartVertex + (j + 1) * ringStride + i;
+                    const d = c + 1;
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+
+            // Lèvre supérieure reliant le dernier anneau extérieur au premier anneau intérieur
+            const topOuterStart = heightSegs * ringStride;
+            const topInnerStart = innerStartVertex;
+            for (let i = 0; i < radialSegs; i++) {
+                const a = topOuterStart + i;
+                const b = a + 1;
+                const c = topInnerStart + i;
+                const d = c + 1;
+                indices.push(a, c, b);
+                indices.push(b, c, d);
+            }
+
+            // Disque du fond extérieur (y = 0) - grille cartésienne haute précision projetée sur le disque si gravure/logo présent
+            const cBot = getColor ? getColor(0, 0) : new THREE.Color(0x94a3b8);
+            if (getBottomYOffset) {
+                const gridN = 320;
+                const halfN = gridN / 2;
+                const capStartIdx = positions.length / 3;
+
+                // Créer une grille cartésienne régulière déformée sur le cercle exact (pour éviter les crénelages radiaux sur les lettres)
+                for (let gz = 0; gz <= gridN; gz++) {
+                    const vz = (gz - halfN) / halfN; // -1 à +1
+                    for (let gx = 0; gx <= gridN; gx++) {
+                        const vx = (gx - halfN) / halfN; // -1 à +1
+
+                        // Sur le pourtour exact du carré (max(|vx|,|vz|) == 1), on fait coïncider exactement les sommets avec les radialSegs du bord
+                        const maxAbs = Math.max(Math.abs(vx), Math.abs(vz));
+                        let px = 0;
+                        let pz = 0;
+                        let frac = 0;
+
+                        if (maxAbs > 0) {
+                            // Projection fluide carré -> disque préservant l'orthogonalité des lettres au centre
+                            const sqX = vx * Math.sqrt(Math.max(0, 1 - (vz * vz) / 2));
+                            const sqZ = vz * Math.sqrt(Math.max(0, 1 - (vx * vx) / 2));
+                            const theta = Math.atan2(sqZ, sqX);
+                            const u = ((theta / (Math.PI * 2)) % 1 + 1) % 1;
+                            const { rOut } = getRadii(u, 0);
+                            frac = Math.min(1, Math.hypot(sqX, sqZ));
+                            px = sqX * rOut;
+                            pz = sqZ * rOut;
+                        }
+
+                        const edgeFade = frac > 0.93 ? Math.max(0, (1 - frac) / 0.07) : 1;
+                        const py = getBottomYOffset(px, pz) * edgeFade;
+                        positions.push(px, py, pz);
+
+                        if (Math.abs(py) > 0.02) {
+                            const shade = py > 0 ? 0.82 : 1.06;
+                            colors.push(
+                                Math.min(1, cBot.r * shade),
+                                Math.min(1, cBot.g * shade),
+                                Math.min(1, cBot.b * shade)
+                            );
+                        } else {
+                            colors.push(cBot.r, cBot.g, cBot.b);
+                        }
+                    }
+                }
+
+                const strideG = gridN + 1;
+                for (let gz = 0; gz < gridN; gz++) {
+                    for (let gx = 0; gx < gridN; gx++) {
+                        const a = capStartIdx + gz * strideG + gx;
+                        const b = a + 1;
+                        const c = capStartIdx + (gz + 1) * strideG + gx;
+                        const d = c + 1;
+                        // Triangulation adaptative selon la diagonale de plus faible pente pour des arêtes de lettres ultra-nettes
+                        const ya = positions[a * 3 + 1];
+                        const yb = positions[b * 3 + 1];
+                        const yc = positions[c * 3 + 1];
+                        const yd = positions[d * 3 + 1];
+                        if (Math.abs(ya - yd) <= Math.abs(yb - yc)) {
+                            indices.push(a, d, b);
+                            indices.push(a, c, d);
+                        } else {
+                            indices.push(a, c, b);
+                            indices.push(b, c, d);
+                        }
+                    }
+                }
+
+                // Fermer hermétiquement le contour circulaire entre le bord de la grille (maxAbs == 1) et le premier anneau de la paroi (j = 0)
+                const rimLoop = [];
+                for (let gx = 0; gx < gridN; gx++) rimLoop.push(capStartIdx + gx);
+                for (let gz = 0; gz < gridN; gz++) rimLoop.push(capStartIdx + gz * strideG + gridN);
+                for (let gx = gridN; gx > 0; gx--) rimLoop.push(capStartIdx + gridN * strideG + gx);
+                for (let gz = gridN; gz > 0; gz--) rimLoop.push(capStartIdx + gz * strideG);
+
+                // Associer chaque segment du pourtour de la grille au sommet le plus proche de l'anneau j = 0 (étanche STL)
+                function nearestOuterIdx(vIdx) {
+                    const x = positions[vIdx * 3];
+                    const z = positions[vIdx * 3 + 2];
+                    let ang = Math.atan2(z, x);
+                    if (ang < 0) ang += Math.PI * 2;
+                    return Math.round((ang / (Math.PI * 2)) * radialSegs) % radialSegs;
+                }
+
+                for (let k = 0; k < rimLoop.length; k++) {
+                    const g0 = rimLoop[k];
+                    const g1 = rimLoop[(k + 1) % rimLoop.length];
+                    const o0 = nearestOuterIdx(g0);
+                    const o1 = nearestOuterIdx(g1);
+                    indices.push(g0, o0, g1);
+                    if (o0 !== o1) {
+                        let cur = o0;
+                        while (cur !== o1) {
+                            const nxt = (cur + 1) % radialSegs;
+                            indices.push(g1, cur, nxt);
+                            cur = nxt;
+                        }
+                    }
+                }
+            } else {
+                const bottomOutCenterIdx = positions.length / 3;
+                positions.push(0, 0, 0);
+                colors.push(cBot.r, cBot.g, cBot.b);
+                for (let i = 0; i < radialSegs; i++) {
+                    indices.push(bottomOutCenterIdx, i, i + 1);
+                }
+            }
+
+            // Centre du fond intérieur (y = bottomThickness) — toujours strictement plat (0 déformation)
+            const bottomInCenterIdx = positions.length / 3;
+            const cInBot = getColor ? getColor(0, bottomThickness) : new THREE.Color(0x94a3b8);
+            positions.push(0, bottomThickness, 0);
+            colors.push(cInBot.r, cInBot.g, cInBot.b);
+            const lastInnerRingStart = innerStartVertex + heightSegs * ringStride;
+            for (let i = 0; i < radialSegs; i++) {
+                indices.push(bottomInCenterIdx, lastInnerRingStart + i, lastInnerRingStart + i + 1);
+            }
+
+            const geom = new THREE.BufferGeometry();
+            geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geom.setIndex(indices);
+            geom.computeVertexNormals();
+            return geom;
+        }
+
+        // Calcul exact du volume (en mm³) et de l'aire de surface (en mm²) d'un maillage fermé (Manifold)
+        function computeMeshMetrics(geom) {
+            if (!geom || !geom.attributes.position) return { volumeMm3: 0, areaMm2: 0 };
+            const pos = geom.attributes.position;
+            const index = geom.index;
+            let signedVol6 = 0;
+            let area2 = 0;
+
+            const v0 = new THREE.Vector3();
+            const v1 = new THREE.Vector3();
+            const v2 = new THREE.Vector3();
+            const cross = new THREE.Vector3();
+            const e1 = new THREE.Vector3();
+            const e2 = new THREE.Vector3();
+
+            const triCount = index ? index.count / 3 : pos.count / 3;
+            for (let i = 0; i < triCount; i++) {
+                const i0 = index ? index.getX(i * 3) : i * 3;
+                const i1 = index ? index.getX(i * 3 + 1) : i * 3 + 1;
+                const i2 = index ? index.getX(i * 3 + 2) : i * 3 + 2;
+
+                v0.fromBufferAttribute(pos, i0);
+                v1.fromBufferAttribute(pos, i1);
+                v2.fromBufferAttribute(pos, i2);
+
+                // Volume signé du tétraèdre (v0, v1, v2, origine)
+                cross.crossVectors(v1, v2);
+                signedVol6 += v0.dot(cross);
+
+                // Aire du triangle
+                e1.subVectors(v1, v0);
+                e2.subVectors(v2, v0);
+                cross.crossVectors(e1, e2);
+                area2 += cross.length();
+            }
+
+            return {
+                volumeMm3: Math.abs(signedVol6) / 6,
+                areaMm2: area2 / 2
+            };
+        }
+
+        function formatPrintDuration(totalMinutes) {
+            const mins = Math.max(1, Math.round(totalMinutes));
+            if (mins < 60) return `${mins} min`;
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return `${h}h ${m.toString().padStart(2, '0')}m`;
+        }
+
+        function updatePrintEstimates(jarGeo, lidGeo, jarHeight, actualLidH) {
+            const jarM = computeMeshMetrics(jarGeo);
+            const lidM = computeMeshMetrics(lidGeo);
+
+            // Profil officiel Bambu Studio : "0.20mm Standard @BBL A1" / "@BBL A1M" (buse 0.40 mm)
+            // - Hauteur de couche : 0.20 mm (1ère couche : 0.20 mm)
+            // - Largeur de ligne : 0.42 mm (paroi ext. 0.42, paroi int. 0.45, remplissage 0.45)
+            // - Boucles de paroi : 2 murs (~0.87 mm d'épaisseur totale par face)
+            // - Coques : 4 couches inférieures (0.8 mm) + 5 couches supérieures (1.0 mm)
+            // - Remplissage standard : 15% (Grille / Gyroïde)
+            const layerH = 0.20;
+            const lineWidth = 0.42;
+            const wallLoops = 2;
+            const wallThicknessPerSide = wallLoops * lineWidth; // ~0.84 mm par face
+            const infillDensity = 0.15;
+
+            function slicePieceMetrics(m, pieceHeight) {
+                // Aire horizontale (fonds/dessus) vs aire verticale (parois)
+                // Pour un bocal/couvercle creux, la surface totale inclut paroi int., paroi ext., fond et dessus
+                const shellVol = Math.min(m.volumeMm3, m.areaMm2 * wallThicknessPerSide * 0.52);
+                const coreVol = Math.max(0, m.volumeMm3 - shellVol);
+                const infillVol = coreVol * infillDensity;
+                const totalExtrudedMm3 = shellVol + infillVol;
+
+                // Séparation parois externes (plus lentes pour la qualité : ~130 mm/s) vs internes/remplissage (~220 mm/s)
+                const outerWallVol = shellVol * 0.48;
+                const innerAndInfillVol = (shellVol * 0.52) + infillVol;
+
+                // Débits volumétriques réels tenant compte des accélérations A1 (10 000 mm/s²) sur trajectoires courbes/filetées :
+                // - Paroi externe + filetages/textures : ~7.5 mm³/s effectif (vitesse moyenne ~90 mm/s sur petits segments)
+                // - Paroi interne + remplissage 15% : ~14.5 mm³/s effectif (vitesse moyenne ~170 mm/s)
+                // - 1ère couche lente (50 mm/s) : ~25 sec supplémentaires
+                const extrusionTimeSec = (outerWallVol / 7.5) + (innerAndInfillVol / 14.5) + 25;
+
+                // Temps de changement de couche, rétractions (Z-hop) et déplacements rapides (500 mm/s)
+                const layers = Math.ceil(pieceHeight / layerH);
+                const travelAndLayerSec = layers * 0.65;
+
+                return {
+                    plasticMm3: totalExtrudedMm3,
+                    printSeconds: extrusionTimeSec + travelAndLayerSec
+                };
+            }
+
+            const jarStats = slicePieceMetrics(jarM, jarHeight);
+            const lidStats = slicePieceMetrics(lidM, actualLidH);
+
+            const plaDensityGPerMm3 = 0.00124; // PLA Bambu Basic (1.24 g/cm³)
+            const jarGrams = jarStats.plasticMm3 * plaDensityGPerMm3;
+            const lidGrams = lidStats.plasticMm3 * plaDensityGPerMm3;
+            const totalGrams = jarGrams + lidGrams;
+
+            // Séquence de préparation standard Bambu Lab A1 / A1 Mini :
+            // Chauffage plateau + buse, nivellement auto rapide, purge et calibration de débit dynamique = ~6 min 30 s
+            const prepSeconds = 390;
+
+            // Si imprimé en mode Plateau 3D, les 2 pièces sont imprimées simultanément (1 seule préparation + léger temps de déplacement inter-pièces)
+            // Sinon, on additionne le temps total d'impression des deux pièces avec une séquence de démarrage
+            const interPartTravelSec = currentViewMode === 'plate' ? Math.ceil(Math.min(jarHeight, actualLidH) / layerH) * 0.35 : 0;
+            const totalSeconds = prepSeconds + jarStats.printSeconds + lidStats.printSeconds + interPartTravelSec;
+            const totalMinutes = totalSeconds / 60;
+
+            const weightEl = document.getElementById('est-weight');
+            const timeEl = document.getElementById('est-time');
+            const costEl = document.getElementById('est-cost');
+            const costPerKg = 20.0; // 20 $ / kg = 0.02 $ / g
+            const totalCost = (totalGrams / 1000) * costPerKg;
+
+            if (weightEl) {
+                weightEl.querySelector('span').textContent = `~${totalGrams.toFixed(1)} g (${jarGrams.toFixed(0)}g + ${lidGrams.toFixed(0)}g)`;
+            }
+            if (timeEl) {
+                timeEl.querySelector('span').textContent = `~${formatPrintDuration(totalMinutes)}`;
+            }
+            if (costEl) {
+                costEl.querySelector('span').textContent = `~${totalCost.toFixed(2)} $`;
+            }
+        }
+
+        // Calcul géométrique exact de la surface de coupe (tranche d'un maillage fermé selon plane)
+        function buildExactCrossSectionGeometry(mesh, plane) {
+            if (!mesh || !mesh.geometry) return new THREE.BufferGeometry();
+            mesh.updateMatrixWorld(true);
+            const matrix = mesh.matrixWorld;
+            const geom = mesh.geometry;
+            const posAttr = geom.attributes.position;
+            const indexAttr = geom.index;
+
+            // Repère orthonormé 2D sur le plan de coupe (normal = plane.normal, point d'origine = -plane.constant * normal)
+            const n = plane.normal.clone().normalize();
+            const origin = n.clone().multiplyScalar(-plane.constant);
+            const upRef = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+            const uAxis = new THREE.Vector3().crossVectors(upRef, n).normalize();
+            const vAxis = new THREE.Vector3().crossVectors(n, uAxis).normalize();
+
+            const segments = [];
+            const vA = new THREE.Vector3();
+            const vB = new THREE.Vector3();
+            const vC = new THREE.Vector3();
+            const rel = new THREE.Vector3();
+
+            function projectToPlane2D(p3) {
+                rel.subVectors(p3, origin);
+                return {
+                    u: rel.dot(uAxis),
+                    v: rel.dot(vAxis)
+                };
+            }
+
+            function interpPoint(p1, d1, p2, d2) {
+                const t = d1 / (d1 - d2);
+                const p3 = new THREE.Vector3(
+                    p1.x + t * (p2.x - p1.x),
+                    p1.y + t * (p2.y - p1.y),
+                    p1.z + t * (p2.z - p1.z)
+                );
+                return projectToPlane2D(p3);
+            }
+
+            const triCount = indexAttr ? indexAttr.count / 3 : posAttr.count / 3;
+            for (let i = 0; i < triCount; i++) {
+                const i0 = indexAttr ? indexAttr.getX(i * 3) : i * 3;
+                const i1 = indexAttr ? indexAttr.getX(i * 3 + 1) : i * 3 + 1;
+                const i2 = indexAttr ? indexAttr.getX(i * 3 + 2) : i * 3 + 2;
+
+                vA.fromBufferAttribute(posAttr, i0).applyMatrix4(matrix);
+                vB.fromBufferAttribute(posAttr, i1).applyMatrix4(matrix);
+                vC.fromBufferAttribute(posAttr, i2).applyMatrix4(matrix);
+
+                const dA = plane.distanceToPoint(vA);
+                const dB = plane.distanceToPoint(vB);
+                const dC = plane.distanceToPoint(vC);
+
+                // Ignorer les triangles entièrement d'un côté du plan
+                if ((dA > 0 && dB > 0 && dC > 0) || (dA < 0 && dB < 0 && dC < 0)) continue;
+
+                const pts = [];
+                if ((dA >= 0 && dB < 0) || (dA < 0 && dB >= 0)) pts.push(interpPoint(vA, dA, vB, dB));
+                if ((dB >= 0 && dC < 0) || (dB < 0 && dC >= 0)) pts.push(interpPoint(vB, dB, vC, dC));
+                if ((dC >= 0 && dA < 0) || (dC < 0 && dA >= 0)) pts.push(interpPoint(vC, dC, vA, dA));
+
+                if (pts.length === 2) {
+                    const du = pts[1].u - pts[0].u;
+                    const dv = pts[1].v - pts[0].v;
+                    if (du * du + dv * dv > 1e-8) {
+                        segments.push([pts[0], pts[1]]);
+                    }
+                }
+            }
+
+            if (segments.length < 3) return new THREE.BufferGeometry();
+
+            // Chaîner les segments en boucles fermées (contours extérieurs + trous intérieurs)
+            const used = new Uint8Array(segments.length);
+            const loops = [];
+            const epsSq = 1e-4;
+
+            for (let i = 0; i < segments.length; i++) {
+                if (used[i]) continue;
+                used[i] = 1;
+                const loop = [segments[i][0], segments[i][1]];
+                let extended = true;
+
+                while (extended) {
+                    extended = false;
+                    const tail = loop[loop.length - 1];
+                    for (let j = 0; j < segments.length; j++) {
+                        if (used[j]) continue;
+                        const s0 = segments[j][0];
+                        const s1 = segments[j][1];
+                        const d0 = (tail.u - s0.u) ** 2 + (tail.v - s0.v) ** 2;
+                        const d1 = (tail.u - s1.u) ** 2 + (tail.v - s1.v) ** 2;
+                        if (d0 < epsSq) {
+                            used[j] = 1;
+                            loop.push(s1);
+                            extended = true;
+                            break;
+                        } else if (d1 < epsSq) {
+                            used[j] = 1;
+                            loop.push(s0);
+                            extended = true;
+                            break;
+                        }
+                    }
+                }
+                if (loop.length >= 3) {
+                    loops.push(loop);
+                }
+            }
+
+            // Construire les formes 2D (ShapeUtils) avec détection automatique des trous
+            const parsedLoops = loops.map(pts => {
+                const vecs = pts.map(p => new THREE.Vector2(p.u, p.v));
+                const area = THREE.ShapeUtils.area(vecs);
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                for (const v of vecs) {
+                    if (v.x < minX) minX = v.x;
+                    if (v.x > maxX) maxX = v.x;
+                    if (v.y < minY) minY = v.y;
+                    if (v.y > maxY) maxY = v.y;
+                }
+                return { vecs, absArea: Math.abs(area), minX, maxX, minY, maxY };
+            }).filter(l => l.absArea > 0.05);
+
+            // Trier du plus grand contour au plus petit
+            parsedLoops.sort((a, b) => b.absArea - a.absArea);
+
+            function isPointInPoly(pt, poly) {
+                let inside = false;
+                for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                    const xi = poly[i].x, yi = poly[i].y;
+                    const xj = poly[j].x, yj = poly[j].y;
+                    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                        (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-12) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            }
+
+            const shapes = [];
+            const assigned = new Uint8Array(parsedLoops.length);
+
+            for (let i = 0; i < parsedLoops.length; i++) {
+                if (assigned[i]) continue;
+                assigned[i] = 1;
+                const outer = parsedLoops[i];
+                const shape = new THREE.Shape(outer.vecs);
+
+                for (let j = i + 1; j < parsedLoops.length; j++) {
+                    if (assigned[j]) continue;
+                    const inner = parsedLoops[j];
+                    if (inner.minX >= outer.minX && inner.maxX <= outer.maxX &&
+                        inner.minY >= outer.minY && inner.maxY <= outer.maxY &&
+                        isPointInPoly(inner.vecs[0], outer.vecs)) {
+                        assigned[j] = 1;
+                        shape.holes.push(new THREE.Path(inner.vecs));
+                    }
+                }
+                shapes.push(shape);
+            }
+
+            if (shapes.length === 0) return new THREE.BufferGeometry();
+
+            const shapeGeom = new THREE.ShapeGeometry(shapes);
+            // Replacer les sommets 2D (u, v) dans l'espace 3D sur le plan de coupe orienté
+            const sPos = shapeGeom.attributes.position;
+            const sUv = shapeGeom.attributes.uv;
+            const pWorld = new THREE.Vector3();
+            for (let i = 0; i < sPos.count; i++) {
+                const uVal = sPos.getX(i);
+                const vVal = sPos.getY(i);
+                pWorld.copy(origin)
+                    .addScaledVector(uAxis, uVal)
+                    .addScaledVector(vAxis, vVal)
+                    .addScaledVector(n, -0.02);
+                sPos.setXYZ(i, pWorld.x, pWorld.y, pWorld.z);
+                sUv.setXY(i, uVal, vVal);
+            }
+            sPos.needsUpdate = true;
+            sUv.needsUpdate = true;
+            shapeGeom.computeVertexNormals();
+            return shapeGeom;
+        }
+
+        // ==========================================
+        // 4. GÉNÉRATION DES MODÈLES (BOCAL + COUVERCLE)
+        // ==========================================
+        function generateModels() {
+            const outerDiameter = parseFloat(document.getElementById('inp-diameter').value);
+            const jarHeight = parseFloat(document.getElementById('inp-jar-height').value);
+            const wallThickness = parseFloat(document.getElementById('inp-wall').value);
+            const lidHeight = parseFloat(document.getElementById('inp-lid-height').value);
+            const baseBevel = parseFloat(document.getElementById('inp-base-bevel').value);
+
+            const silhouette = document.getElementById('inp-silhouette').value;
+            const silAmp = parseFloat(document.getElementById('inp-sil-amp').value);
+
+            const turns = parseFloat(document.getElementById('inp-turns').value);
+            const pitch = parseFloat(document.getElementById('inp-pitch').value);
+            const threadDepth = parseFloat(document.getElementById('inp-thread-depth').value);
+            const clearance = parseFloat(document.getElementById('inp-clearance').value);
+
+            const lidColorHex = document.getElementById('inp-lid-color').value;
+            const lidBevel = parseFloat(document.getElementById('inp-lid-bevel').value);
+            const lidTexType = document.getElementById('inp-lid-tex').value;
+            const lidTexDepth = parseFloat(document.getElementById('inp-lid-tex-depth').value);
+            const lidTexFreq = parseFloat(document.getElementById('inp-lid-tex-freq').value);
+            const lidTwistAngle = parseFloat(document.getElementById('inp-lid-twist').value);
+
+            // Garde-fous géométriques anti-conflit
+            const outerRadius = outerDiameter / 2;
+            const safeWallThickness = Math.min(wallThickness, outerRadius * 0.25);
+            const maxSafeThreadDepth = Math.max(0.4, (outerRadius - safeWallThickness * 2 - clearance - 3) * 0.5);
+            const effectiveThreadDepth = Math.min(threadDepth, maxSafeThreadDepth);
+
+            const maxAllowedThreadH = Math.min(jarHeight * 0.55, lidHeight - safeWallThickness - 1.5);
+            const effectiveThreadZoneH = Math.max(pitch * 0.75, Math.min(turns * pitch, maxAllowedThreadH));
+            const effectivePitch = Math.min(pitch, effectiveThreadZoneH / 0.75);
+
+            const neckHeight = effectiveThreadZoneH + 2.5;
+            const bodyHeight = Math.max(8, jarHeight - neckHeight);
+
+            const neckOuterRadius = outerRadius - safeWallThickness - effectiveThreadDepth - clearance;
+            const neckInnerRadius = Math.max(3, neckOuterRadius - safeWallThickness);
+            const bodyInnerRadius = Math.max(neckInnerRadius, outerRadius - safeWallThickness);
+
+            // Pré-calcul des bornes verticales de chaque section
+            const totalWeight = state.sections.reduce((acc, s) => acc + s.weight, 0) || 1;
+            let cursorY = 0;
+            const computedSections = state.sections.map((s) => {
+                const h = (s.weight / totalWeight) * bodyHeight;
+                const obj = {
+                    ...s,
+                    y0: cursorY,
+                    y1: cursorY + h,
+                    height: h,
+                    threeColor: new THREE.Color(s.color)
+                };
+                cursorY += h;
+                return obj;
+            });
+
+            // Calcul exact des dimensions intérieures utiles et du volume disponible (en mm³ -> mL)
+            const innerHeightMm = Math.max(1, jarHeight - safeWallThickness);
+            const neckInnerDiamMm = neckInnerRadius * 2;
+            const innerSamples = 120;
+            let innerVolumeMm3 = 0;
+            let sumInnerRadius = 0;
+            const dyStep = innerHeightMm / innerSamples;
+
+            for (let s = 0; s < innerSamples; s++) {
+                const ySample = safeWallThickness + (s + 0.5) * dyStep;
+                let rInSample = neckInnerRadius;
+
+                if (ySample <= bodyHeight) {
+                    const vBody = ySample / bodyHeight;
+                    let silOffset = 0;
+                    if (silhouette === 'amphora') silOffset = Math.sin(vBody * Math.PI) * silAmp;
+                    else if (silhouette === 'hourglass') silOffset = -Math.sin(vBody * Math.PI) * Math.min(silAmp, outerRadius * 0.35);
+                    else if (silhouette === 'tapered') silOffset = (1 - vBody) * silAmp;
+                    else if (silhouette === 'shouldered') silOffset = vBody < 0.78 ? silAmp : silAmp * (1 - (vBody - 0.78) / 0.22);
+
+                    let idx = computedSections.findIndex(sec => ySample >= sec.y0 && ySample <= sec.y1 + 0.001);
+                    if (idx === -1) idx = computedSections.length - 1;
+                    const sec = computedSections[idx];
+                    let secWidthOffset = sec.radialOffset;
+                    const transZone = Math.min(4.5, sec.height * 0.25);
+
+                    if (idx > 0 && (ySample - sec.y0) < transZone) {
+                        const prev = computedSections[idx - 1];
+                        const t = 0.5 + 0.5 * ((ySample - sec.y0) / transZone);
+                        secWidthOffset = prev.radialOffset * (1 - t) + sec.radialOffset * t;
+                    }
+                    if ((sec.y1 - ySample) < transZone) {
+                        const nextOffset = (idx < computedSections.length - 1) ? computedSections[idx + 1].radialOffset : 0;
+                        const t = 0.5 + 0.5 * ((sec.y1 - ySample) / transZone);
+                        secWidthOffset = nextOffset * (1 - t) + sec.radialOffset * t;
+                    }
+
+                    const baseChamfer = (baseBevel > 0 && ySample < baseBevel) ? (baseBevel - ySample) * 0.7 : 0;
+                    rInSample = Math.max(4, bodyInnerRadius + silOffset + secWidthOffset - baseChamfer * 0.5);
+                    if (ySample > bodyHeight - 3.5) {
+                        const t = (ySample - (bodyHeight - 3.5)) / 3.5;
+                        rInSample = rInSample * (1 - t) + neckInnerRadius * t;
+                    }
+                }
+
+                sumInnerRadius += rInSample;
+                innerVolumeMm3 += Math.PI * rInSample * rInSample * dyStep;
+            }
+
+            const avgInnerDiamMm = (sumInnerRadius / innerSamples) * 2;
+            const availableMl = innerVolumeMm3 / 1000;
+
+            const elInnerW = document.getElementById('val-inner-width');
+            const elInnerH = document.getElementById('val-inner-height');
+            const elInnerV = document.getElementById('val-inner-volume');
+            if (elInnerW && elInnerH && elInnerV) {
+                elInnerW.textContent = `${formatDim(avgInnerDiamMm)} / ${formatDim(neckInnerDiamMm)}`;
+                elInnerH.textContent = formatDim(innerHeightMm);
+                if (state.unit === 'in') {
+                    const flOz = availableMl * 0.033814;
+                    elInnerV.textContent = `${availableMl.toFixed(0)} mL (${flOz.toFixed(1)} fl oz)`;
+                } else {
+                    elInnerV.textContent = availableMl >= 1000
+                        ? `${availableMl.toFixed(0)} mL (${(availableMl / 1000).toFixed(2)} L)`
+                        : `${availableMl.toFixed(0)} mL`;
+                }
+            }
+
+            const radialSegs = 144;
+            const lidMarkType = document.getElementById('inp-lid-mark-type').value;
+            const lidRadialSegs = lidMarkType !== 'none' ? 288 : 144;
+            const jarHeightSegs = Math.min(260, Math.max(90, Math.round(jarHeight * 1.6)));
+            const lidHeightSegs = Math.min(120, Math.max(48, Math.round(lidHeight * 2.2)));
+
+            // --- 1. BOCAL ---
+            const jarGeo = buildManifoldVessel({
+                radialSegs,
+                heightSegs: jarHeightSegs,
+                totalHeight: jarHeight,
+                bottomThickness: safeWallThickness,
+                getColor: (u, y) => {
+                    if (y >= bodyHeight) {
+                        // Le goulot prend automatiquement la couleur de la section supérieure
+                        return computedSections[computedSections.length - 1].threeColor;
+                    }
+                    const sec = computedSections.find(s => y >= s.y0 && y <= s.y1 + 0.001) || computedSections[computedSections.length - 1];
+                    return sec.threeColor;
+                },
+                getRadii: (u, y) => {
+                    const theta = u * Math.PI * 2;
+                    let rOut = outerRadius;
+                    let rIn = bodyInnerRadius;
+
+                    if (y <= bodyHeight) {
+                        const vBody = y / bodyHeight;
+                        // Courbe de silhouette globale (s'annule aux extrémités pour respecter la base et l'épaulement)
+                        let silOffset = 0;
+                        if (silhouette === 'amphora') {
+                            silOffset = Math.sin(vBody * Math.PI) * silAmp;
+                        } else if (silhouette === 'hourglass') {
+                            silOffset = -Math.sin(vBody * Math.PI) * Math.min(silAmp, outerRadius * 0.35);
+                        } else if (silhouette === 'tapered') {
+                            silOffset = (1 - vBody) * silAmp;
+                        } else if (silhouette === 'shouldered') {
+                            silOffset = vBody < 0.78 ? silAmp : silAmp * (1 - (vBody - 0.78) / 0.22);
+                        }
+
+                        // Trouver la section active et calculer la transition douce entre largeurs
+                        let idx = computedSections.findIndex(s => y >= s.y0 && y <= s.y1 + 0.001);
+                        if (idx === -1) idx = computedSections.length - 1;
+                        const sec = computedSections[idx];
+                        const vSec = sec.height > 0 ? Math.max(0, Math.min(1, (y - sec.y0) / sec.height)) : 0;
+
+                        let secWidthOffset = sec.radialOffset;
+                        const transZone = Math.min(4.5, sec.height * 0.25);
+
+                        // Transition vers la section précédente
+                        if (idx > 0 && (y - sec.y0) < transZone) {
+                            const prev = computedSections[idx - 1];
+                            const t = 0.5 + 0.5 * ((y - sec.y0) / transZone);
+                            secWidthOffset = prev.radialOffset * (1 - t) + sec.radialOffset * t;
+                        }
+                        // Transition vers la section suivante (ou vers 0 en haut du corps pour rejoindre le couvercle)
+                        if ((sec.y1 - y) < transZone) {
+                            const nextOffset = (idx < computedSections.length - 1) ? computedSections[idx + 1].radialOffset : 0;
+                            const t = 0.5 + 0.5 * ((sec.y1 - y) / transZone);
+                            secWidthOffset = nextOffset * (1 - t) + sec.radialOffset * t;
+                        }
+
+                        // Biseau / gorge de jonction entre sections
+                        let seamBevel = 0;
+                        if (sec.bevel > 0) {
+                            if (idx > 0 && (y - sec.y0) < sec.bevel) {
+                                seamBevel -= (1 - (y - sec.y0) / sec.bevel) * (sec.bevel * 0.65);
+                            }
+                            if (idx < computedSections.length - 1 && (sec.y1 - y) < sec.bevel) {
+                                seamBevel -= (1 - (sec.y1 - y) / sec.bevel) * (sec.bevel * 0.65);
+                            }
+                        }
+
+                        const totalRadialOffset = silOffset + secWidthOffset;
+                        const texDisp = getTextureDisplacement(
+                            sec.texType, u, vSec, sec.height,
+                            outerRadius + totalRadialOffset,
+                            sec.texDepth, sec.texFreq, sec.twistAngle
+                        );
+
+                        const baseChamfer = (baseBevel > 0 && y < baseBevel) ? (baseBevel - y) * 0.7 : 0;
+                        const shoulderDist = bodyHeight - y;
+                        const shoulderChamfer = shoulderDist < 1.2 ? (1.2 - shoulderDist) * 0.35 : 0;
+
+                        rOut = Math.max(
+                            neckOuterRadius + effectiveThreadDepth + clearance + 0.6,
+                            outerRadius + totalRadialOffset + texDisp + seamBevel - baseChamfer - shoulderChamfer
+                        );
+
+                        rIn = Math.max(4, bodyInnerRadius + totalRadialOffset - baseChamfer * 0.5);
+                        if (y > bodyHeight - 3.5) {
+                            const t = (y - (bodyHeight - 3.5)) / 3.5;
+                            rIn = rIn * (1 - t) + neckInnerRadius * t;
+                        }
+                    } else {
+                        // Goulot fileté
+                        const yNeck = y - bodyHeight;
+                        const yThreadStart = (neckHeight - effectiveThreadZoneH) / 2;
+                        const threadDisp = getThreadProfile(theta, yNeck - yThreadStart, effectiveThreadZoneH, effectivePitch, effectiveThreadDepth);
+                        const topChamfer = (jarHeight - y) < 1.0 ? (1.0 - (jarHeight - y)) * 0.5 : 0;
+                        rOut = neckOuterRadius + threadDisp - topChamfer;
+                        rIn = neckInnerRadius;
+                    }
+                    return { rIn, rOut };
+                }
+            });
+
+            // --- 2. COUVERCLE ---
+            const axialGap = 0.4;
+            const actualLidH = Math.max(lidHeight, neckHeight + safeWallThickness + axialGap);
+            // Rayon de crête interne du couvercle = rayon de fond du goulot + jeu mécanique
+            const lidThreadCrestRadius = neckOuterRadius + clearance;
+            const yThreadStartOnNeck = (neckHeight - effectiveThreadZoneH) / 2;
+            const lidThreeColor = new THREE.Color(lidColorHex);
+
+            const rawMarkDepth = parseFloat(document.getElementById('inp-mark-depth').value) || 0.4;
+            const isEngravingMode = (state.lidMarkMode === 'engrave' || state.lidMarkMode === 'outline');
+            // Garde-fou strict : en gravure/contour, conserver toujours au moins 1.0 mm (ou 55% de la paroi) de matière pleine sous le fond gravé
+            const maxSafeEngraveDepth = Math.max(0.2, Math.min(safeWallThickness - 1.0, safeWallThickness * 0.45));
+            const safeMarkDepth = isEngravingMode ? Math.min(rawMarkDepth, maxSafeEngraveDepth) : rawMarkDepth;
+            const flatTopRadius = Math.max(4, outerRadius - lidBevel);
+
+            updateLidMarkHeightmap();
+
+            const lidGeo = buildManifoldVessel({
+                radialSegs: lidRadialSegs,
+                heightSegs: lidHeightSegs,
+                totalHeight: actualLidH,
+                bottomThickness: safeWallThickness,
+                getColor: () => lidThreeColor,
+                getBottomYOffset: lidMarkType !== 'none' ? (x, z) => {
+                    const hNorm = sampleLidMarkHeight(x, z, flatTopRadius);
+                    if (hNorm <= 0.01) return 0;
+                    // Uniquement appliqué sur la face extérieure (y=0) ; jamais sur la face intérieure (y=bottomThickness)
+                    const disp = Math.min(hNorm * safeMarkDepth, safeWallThickness * 0.45);
+                    return isEngravingMode ? disp : (-hNorm * safeMarkDepth);
+                } : null,
+                getRadii: (u, y) => {
+                    const theta = u * Math.PI * 2;
+                    const vLid = y / actualLidH;
+                    const topChamfer = (lidBevel > 0 && y < lidBevel) ? (lidBevel - y) * 0.7 : 0;
+                    const texDisp = getTextureDisplacement(lidTexType, u, vLid, actualLidH, outerRadius, lidTexDepth, lidTexFreq, lidTwistAngle);
+                    const rOut = Math.max(lidThreadCrestRadius + effectiveThreadDepth + 1.0, outerRadius + texDisp - topChamfer);
+
+                    // Après rotation de PI autour de X en vue Fermé :
+                    // y_monde = lidWorldY - y, et theta_monde = -theta.
+                    // En posant le couvercle à lidWorldY = bodyHeight + actualLidH,
+                    // y_monde - bodyHeight = actualLidH - y = yFromOpenEdge.
+                    // Pour que l'hélice interne épouse exactement l'hélice externe du goulot (theta_monde = -theta),
+                    // on évalue le profil à (-theta) et on creuse la gorge (+threadGroove) à partir du rayon de crête interne.
+                    const yFromOpenEdge = actualLidH - y;
+                    const threadGroove = getThreadProfile(-theta, yFromOpenEdge - yThreadStartOnNeck, effectiveThreadZoneH, effectivePitch, effectiveThreadDepth);
+                    const entryChamfer = yFromOpenEdge < 1.2 ? (1.2 - yFromOpenEdge) * 0.6 : 0;
+                    const rIn = lidThreadCrestRadius + threadGroove + entryChamfer;
+
+                    return { rIn, rOut };
+                }
+            });
+
+            // Nettoyage des anciens maillages
+            if (jarMesh) { scene.remove(jarMesh); jarMesh.geometry.dispose(); }
+            if (lidMesh) { scene.remove(lidMesh); lidMesh.geometry.dispose(); }
+            if (jarCapMesh) { scene.remove(jarCapMesh); jarCapMesh.geometry.dispose(); jarCapMesh = null; }
+            if (lidCapMesh) { scene.remove(lidCapMesh); lidCapMesh.geometry.dispose(); lidCapMesh = null; }
+
+            const isWireframe = document.getElementById('chk-wireframe').checked;
+            const activeClips = isSectionCut ? [clipPlane] : [];
+
+            const mat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.42,
+                metalness: 0.08,
+                wireframe: isWireframe,
+                clippingPlanes: activeClips,
+                clipShadows: true,
+                side: THREE.DoubleSide
+            });
+
+            jarMesh = new THREE.Mesh(jarGeo, mat);
+            lidMesh = new THREE.Mesh(lidGeo, mat);
+            jarMesh.castShadow = true;
+            jarMesh.receiveShadow = true;
+            lidMesh.castShadow = true;
+            lidMesh.receiveShadow = true;
+            scene.add(jarMesh);
+            scene.add(lidMesh);
+
+            const totalTris = Math.round((jarGeo.index.count + lidGeo.index.count) / 3);
+            document.getElementById('poly-count').textContent = `${totalTris.toLocaleString('fr-FR')} triangles`;
+
+            updatePrintEstimates(jarGeo, lidGeo, jarHeight, actualLidH);
+            updatePositions(jarHeight, actualLidH, neckHeight, outerRadius, bodyHeight);
+            updateClipPlane();
+
+            // Vérifier si le bocal (ou les 2 pièces côte à côte en vue Plateau 3D) dépasse le plateau choisi
+            const pSize = state.plateSize || 256;
+            const requiredSpan = currentViewMode === 'plate' ? (outerDiameter * 2 + 24) : outerDiameter;
+            const statusEl = document.getElementById('status-text');
+            const statusDot = statusEl.previousElementSibling;
+            if (requiredSpan > pSize) {
+                statusEl.textContent = t('plateOverflow')(pSize);
+                if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+            } else {
+                statusEl.textContent = `${t('statusReady')} • ${pSize}×${pSize} mm`;
+                if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            }
+        }
+
+        // ==========================================
+        // 5. MODES D'AFFICHAGE & COUPE
+        // ==========================================
+        function updatePositions(jarHeight, actualLidH, neckHeight, outerRadius, bodyHeight) {
+            if (!jarMesh || !lidMesh) return;
+
+            if (currentViewMode === 'exploded') {
+                jarMesh.position.set(0, 0, 0);
+                jarMesh.rotation.set(0, 0, 0);
+                lidMesh.rotation.set(Math.PI, 0, 0);
+                lidMesh.position.set(0, jarHeight + actualLidH + 22, 0);
+            } else if (currentViewMode === 'closed') {
+                jarMesh.position.set(0, 0, 0);
+                jarMesh.rotation.set(0, 0, 0);
+                lidMesh.rotation.set(Math.PI, 0, 0);
+                lidMesh.position.set(0, bodyHeight + actualLidH, 0);
+            } else if (currentViewMode === 'plate') {
+                const offset = outerRadius + 12;
+                jarMesh.position.set(-offset, 0, 0);
+                jarMesh.rotation.set(0, 0, 0);
+                // Sur le plateau 3D, le couvercle est posé à l'envers (y=0) prêt à imprimer sans support
+                lidMesh.rotation.set(0, 0, 0);
+                lidMesh.position.set(offset, 0, 0);
+            }
+        }
+
+        function updateClipPlane() {
+            const pct = parseFloat(document.getElementById('inp-clip-pos').value) || 0;
+            const rotDeg = parseFloat(document.getElementById('inp-clip-rot').value) || 0;
+            document.getElementById('val-clip-pos').textContent = `${pct}%`;
+            document.getElementById('val-clip-rot').textContent = `${rotDeg}°`;
+
+            const rotRad = (rotDeg * Math.PI) / 180;
+            clipPlane.normal.set(-Math.cos(rotRad), 0, -Math.sin(rotRad)).normalize();
+
+            const outerDiameter = parseFloat(document.getElementById('inp-diameter').value) || 70;
+            const maxSpan = currentViewMode === 'plate' ? outerDiameter * 1.35 : outerDiameter * 0.65;
+            const offsetDist = (pct / 100) * maxSpan;
+
+            clipPlane.constant = offsetDist;
+
+            if (jarCapMesh) { scene.remove(jarCapMesh); jarCapMesh.geometry.dispose(); jarCapMesh = null; }
+            if (lidCapMesh) { scene.remove(lidCapMesh); lidCapMesh.geometry.dispose(); lidCapMesh = null; }
+
+            const showCut = isSectionCut && !document.getElementById('chk-wireframe').checked;
+            if (showCut && jarMesh && lidMesh) {
+                const jarSliceGeom = buildExactCrossSectionGeometry(jarMesh, clipPlane);
+                if (jarSliceGeom.attributes.position && jarSliceGeom.attributes.position.count > 0) {
+                    jarCapMesh = new THREE.Mesh(jarSliceGeom, jarCapMat);
+                    scene.add(jarCapMesh);
+                }
+
+                const lidSliceGeom = buildExactCrossSectionGeometry(lidMesh, clipPlane);
+                if (lidSliceGeom.attributes.position && lidSliceGeom.attributes.position.count > 0) {
+                    lidCapMesh = new THREE.Mesh(lidSliceGeom, lidCapMat);
+                    scene.add(lidCapMesh);
+                }
+            }
+        }
+
+        // ==========================================
+        // 6. RENDU DYNAMIQUE DES SECTIONS & UI
+        // ==========================================
+        function renderSectionsUI() {
+            const containerEl = document.getElementById('sections-container');
+            containerEl.innerHTML = '';
+
+            state.sections.forEach((sec, idx) => {
+                const card = document.createElement('div');
+                card.className = 'p-3 rounded-2xl bg-white/40 dark:bg-slate-950/35 border border-white/50 dark:border-white/10 space-y-2.5';
+
+                const showRemove = state.sections.length > 1;
+                const showTwist = sec.texType === 'twist';
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-xs text-slate-900 dark:text-white">${t('sectionLabel')} #${idx + 1}</span>
+                        <div class="flex items-center gap-2">
+                            <input type="color" data-idx="${idx}" class="sec-color w-6 h-6 rounded-lg cursor-pointer border-0 bg-transparent" value="${sec.color}">
+                            ${showRemove ? `<button type="button" data-idx="${idx}" class="sec-remove text-xs text-rose-500 hover:bg-rose-500/15 px-2 py-0.5 rounded-full font-bold transition" title="Supprimer">×</button>` : ''}
+                        </div>
+                    </div>
+
+                    ${state.sections.length > 1 ? `
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('secHeightPct')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${sec.weight}</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-weight w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="10" max="100" step="5" value="${sec.weight}">
+                    </div>` : ''}
+
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('secWidthOffset')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${sec.radialOffset >= 0 ? '+' : ''}${formatDim(sec.radialOffset)}</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-width w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="-15" max="25" step="0.5" value="${sec.radialOffset}">
+                    </div>
+
+                    ${state.sections.length > 1 ? `
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('secBevel')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${formatDim(sec.bevel)}</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-bevel w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="0" max="6" step="0.5" value="${sec.bevel}">
+                    </div>` : ''}
+
+                    <div>
+                        <label class="block text-[11px] text-slate-600 dark:text-slate-300 mb-1">${t('secTexture')}</label>
+                        <select data-idx="${idx}" class="sec-tex w-full p-1.5 rounded-xl liquid-input text-xs font-medium focus:outline-none focus:border-teal-500">
+                            <option value="smooth" ${sec.texType === 'smooth' ? 'selected' : ''}>Lisse</option>
+                            <option value="flutes" ${sec.texType === 'flutes' ? 'selected' : ''}>Cannelures verticales</option>
+                            <option value="knurl" ${sec.texType === 'knurl' ? 'selected' : ''}>Moletage diamant</option>
+                            <option value="rings" ${sec.texType === 'rings' ? 'selected' : ''}>Anneaux horizontaux</option>
+                            <option value="twist" ${sec.texType === 'twist' ? 'selected' : ''}>Torsade hélicoïdale</option>
+                            <option value="facets" ${sec.texType === 'facets' ? 'selected' : ''}>Facettes polygonales (Carré / Polygone)</option>
+                        </select>
+                    </div>
+
+                    ${sec.texType !== 'smooth' ? `
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('texDepth')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${formatDim(sec.texDepth)}</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-depth w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="0.1" max="3.5" step="0.1" value="${sec.texDepth}">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('texFreq')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${sec.texFreq}</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-freq w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="6" max="72" step="2" value="${sec.texFreq}">
+                    </div>` : ''}
+
+                    ${showTwist ? `
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-600 dark:text-slate-300">${t('twistAngle')}</span>
+                            <span class="font-mono font-bold text-teal-700 dark:text-teal-300">${sec.twistAngle}°</span>
+                        </div>
+                        <input type="range" data-idx="${idx}" class="sec-twist w-full h-1.5 rounded-lg bg-slate-300/60 dark:bg-slate-700/70" min="-360" max="360" step="5" value="${sec.twistAngle}">
+                    </div>` : ''}
+                `;
+                containerEl.appendChild(card);
+            });
+
+            // Attacher les écouteurs sur les contrôles de section
+            containerEl.querySelectorAll('.sec-color').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    state.sections[+e.target.dataset.idx].color = e.target.value;
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-remove').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    state.sections.splice(+e.target.dataset.idx, 1);
+                    renderSectionsUI();
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-weight').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    state.sections[+e.target.dataset.idx].weight = +e.target.value;
+                    e.target.previousElementSibling.lastElementChild.textContent = e.target.value;
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-width').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const val = +e.target.value;
+                    state.sections[+e.target.dataset.idx].radialOffset = val;
+                    e.target.previousElementSibling.lastElementChild.textContent = `${val >= 0 ? '+' : ''}${formatDim(val)}`;
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-bevel').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const val = +e.target.value;
+                    state.sections[+e.target.dataset.idx].bevel = val;
+                    e.target.previousElementSibling.lastElementChild.textContent = formatDim(val);
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-tex').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    state.sections[+e.target.dataset.idx].texType = e.target.value;
+                    renderSectionsUI();
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-depth').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const val = +e.target.value;
+                    state.sections[+e.target.dataset.idx].texDepth = val;
+                    e.target.previousElementSibling.lastElementChild.textContent = formatDim(val);
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-freq').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    state.sections[+e.target.dataset.idx].texFreq = +e.target.value;
+                    e.target.previousElementSibling.lastElementChild.textContent = e.target.value;
+                    generateModels();
+                });
+            });
+            containerEl.querySelectorAll('.sec-twist').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    state.sections[+e.target.dataset.idx].twistAngle = +e.target.value;
+                    e.target.previousElementSibling.lastElementChild.textContent = `${e.target.value}°`;
+                    generateModels();
+                });
+            });
+
+            document.getElementById('btn-add-section').style.display = state.sections.length >= 4 ? 'none' : 'flex';
+        }
+
+        function refreshLabelsAndValues() {
+            document.getElementById('app-title').textContent = t('appTitle');
+            document.getElementById('app-subtitle').textContent = t('appSubtitle');
+            document.getElementById('lbl-help-btn').textContent = t('helpBtn');
+            document.getElementById('help-modal-title').textContent = t('helpTitle');
+            document.getElementById('help-modal-body').innerHTML = t('helpHtml');
+            document.getElementById('btn-close-help-bottom').textContent = t('helpGotIt');
+            document.getElementById('welcome-modal-title').textContent = t('welcomeTitle');
+            document.getElementById('welcome-modal-sub').textContent = t('welcomeSub');
+            document.getElementById('welcome-modal-body').innerHTML = t('welcomeHtml');
+            document.getElementById('lbl-welcome-dont-show').textContent = t('welcomeDontShow');
+            document.getElementById('btn-close-welcome').textContent = t('welcomeStart');
+            document.getElementById('lbl-prefs-btn').textContent = t('prefsBtn');
+            document.getElementById('sec1-title').textContent = t('sec1Title')(state.unit);
+            document.getElementById('sec2-title').textContent = t('sec2Title');
+            document.getElementById('sec3-title').textContent = t('sec3Title');
+            document.getElementById('sec4-title').textContent = t('sec4Title');
+            document.getElementById('sec5-title').textContent = t('sec5Title');
+            document.getElementById('lbl-stl-group').textContent = t('stlGroup');
+            document.getElementById('lbl-obj-group').textContent = t('objGroup');
+
+            document.getElementById('lbl-diameter').textContent = t('diameter');
+            document.getElementById('lbl-jar-height').textContent = t('jarHeight');
+            document.getElementById('lbl-wall').textContent = t('wall');
+            document.getElementById('lbl-lid-height').textContent = t('lidHeight');
+            document.getElementById('lbl-base-bevel').textContent = t('baseBevel');
+            document.getElementById('lbl-inner-dims-title').firstElementChild.textContent = t('innerDimsTitle');
+            document.getElementById('lbl-inner-width').textContent = t('innerWidth');
+            document.getElementById('lbl-inner-height').textContent = t('innerHeight');
+            document.getElementById('lbl-inner-volume').textContent = t('innerVolume');
+            document.getElementById('lbl-silhouette').textContent = t('silhouette');
+            document.getElementById('lbl-sil-amp').textContent = t('silAmp');
+            document.getElementById('lbl-add-section').textContent = t('addSection');
+
+            document.getElementById('lbl-turns').textContent = t('turns');
+            document.getElementById('lbl-pitch').textContent = t('pitch');
+            document.getElementById('lbl-thread-depth').textContent = t('threadDepth');
+            document.getElementById('lbl-clearance').textContent = t('clearance');
+
+            document.getElementById('lbl-lid-color').textContent = t('lidColor');
+            document.getElementById('lbl-lid-bevel').textContent = t('lidBevel');
+            document.getElementById('lbl-lid-tex').textContent = t('lidTex');
+            document.getElementById('lbl-lid-tex-depth').textContent = t('texDepth');
+            document.getElementById('lbl-lid-tex-freq').textContent = t('texFreq');
+            document.getElementById('lbl-lid-twist').textContent = t('twistAngle');
+
+            document.getElementById('lbl-lid-mark-type').textContent = t('lidMarkType');
+            document.getElementById('btn-mark-engrave').textContent = t('markEngrave');
+            document.getElementById('btn-mark-outline').textContent = t('markOutline');
+            document.getElementById('btn-mark-emboss').textContent = t('markEmboss');
+            document.getElementById('lbl-outline-width').textContent = t('outlineWidth');
+            document.getElementById('lbl-upload-logo').textContent = t('uploadLogo');
+            document.getElementById('lbl-logo-invert').textContent = t('logoInvert');
+            document.getElementById('lbl-mark-size').textContent = t('markSize');
+            document.getElementById('lbl-mark-depth').textContent = t('markDepth');
+            document.getElementById('lbl-mark-rot').textContent = t('markRot');
+
+            document.getElementById('lbl-export-jar').textContent = t('exportJar');
+            document.getElementById('lbl-export-lid').textContent = t('exportLid');
+            document.getElementById('lbl-export-both').textContent = t('exportBoth');
+            document.getElementById('lbl-export-jar-obj').textContent = t('exportJarObj');
+            document.getElementById('lbl-export-lid-obj').textContent = t('exportLidObj');
+            document.getElementById('lbl-export-both-obj').textContent = t('exportBothObj');
+
+            document.getElementById('btn-view-exploded').textContent = t('viewExploded');
+            document.getElementById('btn-view-closed').textContent = t('viewClosed');
+            document.getElementById('btn-view-plate').textContent = t('viewPlate');
+            document.getElementById('lbl-wireframe').textContent = t('wireframe');
+            document.getElementById('lbl-section').textContent = t('sectionCut');
+            document.getElementById('lbl-clip-pos').textContent = t('clipPos');
+            document.getElementById('lbl-clip-rot').textContent = t('clipRot');
+
+            document.getElementById('prefs-modal-title').textContent = t('prefsTitle');
+            document.getElementById('lbl-pref-theme').textContent = t('prefTheme');
+            document.getElementById('lbl-pref-lang').textContent = t('prefLang');
+            document.getElementById('lbl-pref-unit').textContent = t('prefUnit');
+            document.getElementById('lbl-pref-plate').textContent = t('prefPlate');
+            document.getElementById('btn-save-prefs').textContent = t('closeBtn');
+
+            // Mise à jour des valeurs formatées
+            document.getElementById('val-diameter').textContent = formatDim(+document.getElementById('inp-diameter').value);
+            document.getElementById('val-jar-height').textContent = formatDim(+document.getElementById('inp-jar-height').value);
+            document.getElementById('val-wall').textContent = formatDim(+document.getElementById('inp-wall').value);
+            document.getElementById('val-lid-height').textContent = formatDim(+document.getElementById('inp-lid-height').value);
+            document.getElementById('val-base-bevel').textContent = formatDim(+document.getElementById('inp-base-bevel').value);
+            document.getElementById('val-sil-amp').textContent = formatDim(+document.getElementById('inp-sil-amp').value);
+            document.getElementById('val-turns').textContent = `${(+document.getElementById('inp-turns').value).toFixed(2)} ${t('turnsUnit')}`;
+            document.getElementById('val-pitch').textContent = formatDim(+document.getElementById('inp-pitch').value);
+            document.getElementById('val-thread-depth').textContent = formatDim(+document.getElementById('inp-thread-depth').value);
+            document.getElementById('val-clearance').textContent = formatDim(+document.getElementById('inp-clearance').value);
+            document.getElementById('val-lid-bevel').textContent = formatDim(+document.getElementById('inp-lid-bevel').value);
+            document.getElementById('val-lid-tex-depth').textContent = formatDim(+document.getElementById('inp-lid-tex-depth').value);
+            document.getElementById('val-lid-tex-freq').textContent = document.getElementById('inp-lid-tex-freq').value;
+            document.getElementById('val-lid-twist').textContent = `${document.getElementById('inp-lid-twist').value}°`;
+            document.getElementById('val-mark-size').textContent = `${document.getElementById('inp-mark-size').value}%`;
+            document.getElementById('val-mark-depth').textContent = formatDim(+document.getElementById('inp-mark-depth').value);
+            document.getElementById('val-mark-rot').textContent = `${document.getElementById('inp-mark-rot').value}°`;
+            document.getElementById('val-outline-width').textContent = formatDim(+document.getElementById('inp-outline-width').value);
+
+            renderSectionsUI();
+        }
+
+        // ==========================================
+        // 7. EXPORT STL & OBJ MULTI-COULEURS (ORIENTÉ AXE Z SLICER)
+        // ==========================================
+        function buildColoredOBJString(entries) {
+            const lines = [
+                '# Générateur de Bocal 3D - Export OBJ Multi-couleurs (Z-up)',
+                '# Compatible Bambu Studio, OrcaSlicer, PrusaSlicer'
+            ];
+            let vertexOffset = 1;
+
+            for (const entry of entries) {
+                const geom = entry.geometry;
+                const pos = geom.attributes.position;
+                const col = geom.attributes.color;
+                const index = geom.index;
+
+                lines.push(`o ${entry.name}`);
+
+                // 1. Écrire les sommets avec leurs couleurs RGB normalisées (v x y z r g b)
+                for (let i = 0; i < pos.count; i++) {
+                    const x = pos.getX(i).toFixed(4);
+                    const y = pos.getY(i).toFixed(4);
+                    const z = pos.getZ(i).toFixed(4);
+                    const r = col ? col.getX(i).toFixed(4) : '0.8500';
+                    const g = col ? col.getY(i).toFixed(4) : '0.8500';
+                    const b = col ? col.getZ(i).toFixed(4) : '0.8500';
+                    lines.push(`v ${x} ${y} ${z} ${r} ${g} ${b}`);
+                }
+
+                // 2. Regrouper les faces par couleur hexadécimale (groupes g color_XXXXXX pour sélection rapide dans le slicer)
+                const groupsByHex = new Map();
+                const triCount = index ? index.count / 3 : pos.count / 3;
+
+                for (let tIdx = 0; tIdx < triCount; tIdx++) {
+                    const i0 = index ? index.getX(tIdx * 3) : tIdx * 3;
+                    const i1 = index ? index.getX(tIdx * 3 + 1) : tIdx * 3 + 1;
+                    const i2 = index ? index.getX(tIdx * 3 + 2) : tIdx * 3 + 2;
+
+                    let hexKey = 'default';
+                    if (col) {
+                        const rB = Math.round(((col.getX(i0) + col.getX(i1) + col.getX(i2)) / 3) * 255);
+                        const gB = Math.round(((col.getY(i0) + col.getY(i1) + col.getY(i2)) / 3) * 255);
+                        const bB = Math.round(((col.getZ(i0) + col.getZ(i1) + col.getZ(i2)) / 3) * 255);
+                        hexKey = ((1 << 24) + (rB << 16) + (gB << 8) + bB).toString(16).slice(1);
+                    }
+
+                    if (!groupsByHex.has(hexKey)) groupsByHex.set(hexKey, []);
+                    groupsByHex.get(hexKey).push(`f ${i0 + vertexOffset} ${i1 + vertexOffset} ${i2 + vertexOffset}`);
+                }
+
+                let grpIdx = 1;
+                for (const [hexKey, faces] of groupsByHex.entries()) {
+                    lines.push(`g ${entry.name}_couleur_${grpIdx}_${hexKey}`);
+                    for (let f = 0; f < faces.length; f++) {
+                        lines.push(faces[f]);
+                    }
+                    grpIdx++;
+                }
+
+                vertexOffset += pos.count;
+            }
+
+            return lines.join('\n');
+        }
+
+        function downloadTextFile(content, filename) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast(`Exporté : ${filename}`);
+        }
+
+        function exportMeshToOBJ(mesh, objectName, filename) {
+            if (!mesh) return;
+            const cloneGeom = mesh.geometry.clone();
+            cloneGeom.rotateX(Math.PI / 2);
+            const objText = buildColoredOBJString([{ name: objectName, geometry: cloneGeom }]);
+            cloneGeom.dispose();
+            downloadTextFile(objText, filename);
+        }
+
+        function exportPlateToOBJ() {
+            if (!jarMesh || !lidMesh) return;
+            const outerRadius = (+document.getElementById('inp-diameter').value) / 2;
+            const offset = outerRadius + 12;
+
+            const jarClone = jarMesh.geometry.clone();
+            jarClone.translate(-offset, 0, 0);
+            jarClone.rotateX(Math.PI / 2);
+
+            const lidClone = lidMesh.geometry.clone();
+            lidClone.translate(offset, 0, 0);
+            lidClone.rotateX(Math.PI / 2);
+
+            const objText = buildColoredOBJString([
+                { name: 'bocal', geometry: jarClone },
+                { name: 'couvercle', geometry: lidClone }
+            ]);
+            jarClone.dispose();
+            lidClone.dispose();
+            downloadTextFile(objText, 'bocal_et_couvercle_couleurs.obj');
+        }
+
+        function exportMeshToSTL(mesh, filename) {
+            if (!mesh) return;
+            const exporter = new THREE.STLExporter();
+            const exportScene = new THREE.Scene();
+
+            // Conversion Y-up (Three.js) -> Z-up (Cura, PrusaSlicer, Bambu Studio)
+            const cloneGeom = mesh.geometry.clone();
+            cloneGeom.rotateX(Math.PI / 2);
+
+            const exportMesh = new THREE.Mesh(cloneGeom);
+            exportScene.add(exportMesh);
+
+            const result = exporter.parse(exportScene, { binary: true });
+            const blob = new Blob([result], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast(`Exporté : ${filename}`);
+        }
+
+        function exportPlateToSTL() {
+            if (!jarMesh || !lidMesh) return;
+            const exporter = new THREE.STLExporter();
+            const exportScene = new THREE.Scene();
+
+            const outerRadius = (+document.getElementById('inp-diameter').value) / 2;
+            const offset = outerRadius + 12;
+
+            const jarClone = jarMesh.geometry.clone();
+            jarClone.translate(-offset, 0, 0);
+            jarClone.rotateX(Math.PI / 2);
+
+            const lidClone = lidMesh.geometry.clone();
+            lidClone.translate(offset, 0, 0);
+            lidClone.rotateX(Math.PI / 2);
+
+            exportScene.add(new THREE.Mesh(jarClone));
+            exportScene.add(new THREE.Mesh(lidClone));
+
+            const result = exporter.parse(exportScene, { binary: true });
+            const blob = new Blob([result], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'bocal_et_couvercle_plateau.stl';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast('Exporté : bocal_et_couvercle_plateau.stl');
+        }
+
+        // ==========================================
+        // 8. ÉCOUTEURS D'ÉVÉNEMENTS & BOUCLE 3D
+        // ==========================================
+        // Accordéons (fermés par défaut)
+        document.querySelectorAll('.accordion-trigger').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = document.getElementById(btn.dataset.target);
+                const arrow = btn.querySelector('.accordion-arrow');
+                target.classList.toggle('open');
+                arrow.classList.toggle('open');
+            });
+        });
+
+        // Contrôles principaux
+        const liveInputs = [
+            'inp-diameter', 'inp-jar-height', 'inp-wall', 'inp-lid-height', 'inp-base-bevel',
+            'inp-sil-amp', 'inp-turns', 'inp-pitch', 'inp-thread-depth', 'inp-clearance',
+            'inp-lid-bevel', 'inp-lid-tex-depth', 'inp-lid-tex-freq', 'inp-lid-twist',
+            'inp-mark-size', 'inp-mark-depth', 'inp-mark-rot', 'inp-outline-width'
+        ];
+        liveInputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                refreshLabelsAndValues();
+                generateModels();
+            });
+        });
+
+        // Contrôles Texte & Logo sur le couvercle
+        document.getElementById('inp-lid-mark-type').addEventListener('change', (e) => {
+            const val = e.target.value;
+            document.getElementById('lid-mark-controls').classList.toggle('hidden', val === 'none');
+            document.getElementById('lid-mark-text-wrap').classList.toggle('hidden', val !== 'text');
+            document.getElementById('lid-mark-logo-wrap').classList.toggle('hidden', val !== 'logo');
+            generateModels();
+        });
+
+        function setLidMarkMode(mode) {
+            state.lidMarkMode = mode;
+            ['engrave', 'outline', 'emboss'].forEach(m => {
+                const btn = document.getElementById(`btn-mark-${m}`);
+                if (m === mode) {
+                    btn.className = 'py-1.5 rounded-full bg-gradient-to-b from-sky-400 to-teal-500 text-slate-950 shadow-sm transition';
+                } else {
+                    btn.className = 'py-1.5 rounded-full transition text-slate-700 dark:text-slate-200';
+                }
+            });
+            document.getElementById('lid-mark-outline-wrap').classList.toggle('hidden', mode !== 'outline');
+            generateModels();
+        }
+
+        document.getElementById('btn-mark-engrave').addEventListener('click', () => setLidMarkMode('engrave'));
+        document.getElementById('btn-mark-outline').addEventListener('click', () => setLidMarkMode('outline'));
+        document.getElementById('btn-mark-emboss').addEventListener('click', () => setLidMarkMode('emboss'));
+
+        document.getElementById('inp-lid-mark-text').addEventListener('input', generateModels);
+        document.getElementById('inp-lid-mark-font').addEventListener('change', () => {
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(generateModels);
+            } else {
+                generateModels();
+            }
+        });
+        document.getElementById('chk-logo-invert').addEventListener('change', generateModels);
+
+        document.getElementById('inp-lid-logo-file').addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.svg') && file.type !== 'image/svg+xml') {
+                showToast('Veuillez sélectionner un fichier SVG (.svg)');
+                e.target.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(ev.target.result, 'image/svg+xml');
+                    const svgEl = doc.querySelector('svg');
+                    if (!svgEl) {
+                        showToast('Fichier SVG invalide');
+                        return;
+                    }
+                    // Garantir des dimensions explicites pour la rasterisation haute résolution (2048 px)
+                    if (!svgEl.getAttribute('viewBox') && svgEl.getAttribute('width') && svgEl.getAttribute('height')) {
+                        const w = parseFloat(svgEl.getAttribute('width')) || 100;
+                        const h = parseFloat(svgEl.getAttribute('height')) || 100;
+                        svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+                    }
+                    svgEl.setAttribute('width', '2048');
+                    svgEl.setAttribute('height', '2048');
+
+                    const serialized = new XMLSerializer().serializeToString(svgEl);
+                    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(svgBlob);
+
+                    const img = new Image();
+                    img.onload = () => {
+                        state.lidLogoImage = img;
+                        URL.revokeObjectURL(blobUrl);
+                        generateModels();
+                        showToast(`SVG chargé : ${file.name}`);
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(blobUrl);
+                        showToast('Erreur lors de la lecture du SVG');
+                    };
+                    img.src = blobUrl;
+                } catch (err) {
+                    showToast('Erreur de décodage du SVG');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('inp-silhouette').addEventListener('change', (e) => {
+            document.getElementById('silhouette-amp-wrap').classList.toggle('hidden', e.target.value === 'cylinder');
+            generateModels();
+        });
+
+        document.getElementById('inp-lid-tex').addEventListener('change', (e) => {
+            const val = e.target.value;
+            document.getElementById('lid-tex-params').classList.toggle('hidden', val === 'smooth');
+            document.getElementById('lid-twist-wrap').classList.toggle('hidden', val !== 'twist');
+            generateModels();
+        });
+
+        document.getElementById('inp-lid-color').addEventListener('input', generateModels);
+
+        document.getElementById('btn-add-section').addEventListener('click', () => {
+            if (state.sections.length >= 4) return;
+            const palette = ['#e2e8f0', '#93c5fd', '#fcd34d', '#6ee7b7'];
+            state.sections.push({
+                id: Date.now(),
+                weight: 50,
+                radialOffset: 0,
+                bevel: 1.5,
+                texType: 'smooth',
+                texDepth: 0.8,
+                texFreq: 28,
+                twistAngle: 45,
+                color: palette[state.sections.length % palette.length]
+            });
+            renderSectionsUI();
+            generateModels();
+        });
+
+        // Modes de vue
+        document.querySelectorAll('.view-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.view-mode-btn').forEach(b => {
+                    b.className = 'view-mode-btn px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition';
+                });
+                btn.className = 'view-mode-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm transition';
+                currentViewMode = btn.dataset.mode;
+                generateModels();
+            });
+        });
+
+        // Filaire & Coupe
+        document.getElementById('chk-wireframe').addEventListener('change', generateModels);
+        document.getElementById('chk-section').addEventListener('change', (e) => {
+            isSectionCut = e.target.checked;
+            document.getElementById('clip-slider-panel').classList.toggle('hidden', !isSectionCut);
+            generateModels();
+        });
+        document.getElementById('inp-clip-pos').addEventListener('input', updateClipPlane);
+        document.getElementById('inp-clip-rot').addEventListener('input', updateClipPlane);
+
+        // Préférences
+        const prefsModal = document.getElementById('prefs-modal');
+        document.getElementById('btn-prefs').addEventListener('click', () => prefsModal.classList.remove('hidden'));
+        document.getElementById('btn-close-prefs').addEventListener('click', () => prefsModal.classList.add('hidden'));
+        document.getElementById('btn-save-prefs').addEventListener('click', () => prefsModal.classList.add('hidden'));
+
+        // Aide
+        const helpModal = document.getElementById('help-modal');
+        document.getElementById('btn-help').addEventListener('click', () => helpModal.classList.remove('hidden'));
+        document.getElementById('btn-close-help').addEventListener('click', () => helpModal.classList.add('hidden'));
+        document.getElementById('btn-close-help-bottom').addEventListener('click', () => helpModal.classList.add('hidden'));
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) helpModal.classList.add('hidden');
+        });
+
+        // Popup d'accueil à l'ouverture
+        const welcomeModal = document.getElementById('welcome-modal');
+        function closeWelcomeModal() {
+            welcomeModal.classList.add('hidden');
+            try {
+                if (document.getElementById('chk-welcome-dont-show').checked) {
+                    localStorage.setItem('bocal3d_hide_welcome', '1');
+                }
+            } catch (e) {}
+        }
+        document.getElementById('btn-close-welcome').addEventListener('click', closeWelcomeModal);
+        document.getElementById('btn-close-welcome-x').addEventListener('click', closeWelcomeModal);
+        welcomeModal.addEventListener('click', (e) => {
+            if (e.target === welcomeModal) closeWelcomeModal();
+        });
+
+        document.getElementById('pref-theme').addEventListener('change', (e) => {
+            state.theme = e.target.value;
+            applyTheme();
+        });
+        document.getElementById('pref-lang').addEventListener('change', (e) => {
+            state.lang = e.target.value;
+            refreshLabelsAndValues();
+        });
+        document.getElementById('pref-unit').addEventListener('change', (e) => {
+            state.unit = e.target.value;
+            refreshLabelsAndValues();
+            generateModels();
+        });
+        document.getElementById('pref-plate').addEventListener('change', (e) => {
+            state.plateSize = parseInt(e.target.value, 10) || 256;
+            rebuildBuildPlateGrid();
+            generateModels();
+        });
+
+        // Boutons Export STL & OBJ
+        document.getElementById('btn-export-jar').addEventListener('click', () => exportMeshToSTL(jarMesh, 'bocal_3d.stl'));
+        document.getElementById('btn-export-lid').addEventListener('click', () => exportMeshToSTL(lidMesh, 'couvercle_3d.stl'));
+        document.getElementById('btn-export-both').addEventListener('click', exportPlateToSTL);
+        document.getElementById('btn-export-jar-obj').addEventListener('click', () => exportMeshToOBJ(jarMesh, 'bocal', 'bocal_3d_couleurs.obj'));
+        document.getElementById('btn-export-lid-obj').addEventListener('click', () => exportMeshToOBJ(lidMesh, 'couvercle', 'couvercle_3d_couleurs.obj'));
+        document.getElementById('btn-export-both-obj').addEventListener('click', exportPlateToOBJ);
+
+        // Redimensionnement
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Boucle d'animation
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Démarrage
+        window.onload = function () {
+            applyTheme();
+            refreshLabelsAndValues();
+            generateModels();
+            animate();
+            let hideWelcome = false;
+            try {
+                hideWelcome = localStorage.getItem('bocal3d_hide_welcome') === '1';
+            } catch (e) {}
+            if (!hideWelcome) {
+                welcomeModal.classList.remove('hidden');
+            }
+        };
+    </script>
+</body>
+</html>
